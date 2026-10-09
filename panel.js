@@ -101,7 +101,7 @@ async function pasteAll(site) {
 async function startPicking() {
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['picker.js'] });
-    window.close();
+    setStatus('Click a highlighted field on the page. Esc cancels.');
   } catch (error) {
     setStatus(`Can't pick on this page: ${error.message}`);
   }
@@ -252,19 +252,52 @@ function render() {
   else renderList();
 }
 
-async function init() {
+async function readTab() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  tabHost = null;
   try {
     const url = new URL(tab.url);
     if (url.protocol === 'http:' || url.protocol === 'https:') tabHost = url.hostname;
   } catch {
     // No readable URL: leave tabHost null.
   }
+}
+
+// The panel outlives the page, so follow the user as they switch tabs or navigate.
+async function onTabChange() {
+  const previousHost = tabHost;
+  await readTab();
+  await refreshFound();
+  if (tabHost !== previousHost) {
+    // Land on the current site's fields when it's already saved.
+    editingHost = sites[tabHost] ? tabHost : null;
+  } else if (document.activeElement.matches('input, textarea')) {
+    // Same site: don't redraw under someone who is typing.
+    return;
+  }
+  render();
+}
+
+async function onFieldPicked() {
   sites = (await chrome.storage.local.get(SITES_KEY))[SITES_KEY] || {};
   await refreshFound();
-  // Land on the current site's fields when it's already saved.
+  render();
+}
+
+async function init() {
+  await readTab();
+  sites = (await chrome.storage.local.get(SITES_KEY))[SITES_KEY] || {};
+  await refreshFound();
   editingHost = sites[tabHost] ? tabHost : null;
   render();
+
+  chrome.tabs.onActivated.addListener(onTabChange);
+  chrome.tabs.onUpdated.addListener((tabId, change) => {
+    if (tab && tabId === tab.id && (change.url || change.status === 'complete')) onTabChange();
+  });
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message && message.type === 'field-picked') onFieldPicked();
+  });
 }
 
 init();

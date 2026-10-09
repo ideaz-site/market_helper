@@ -1,7 +1,6 @@
-// Injected into the page by the popup. Covers every text field with a
-// clickable overlay; clicking one saves that field under the current site. The
-// popup closes as soon as the page is clicked, so this script writes to storage
-// itself.
+// Injected into the page by the side panel. Covers every text field that isn't
+// saved yet with a clickable overlay; clicking one saves that field under the
+// current site and tells the panel to refresh.
 (() => {
   if (window.__marketHelperPicking) return;
   window.__marketHelperPicking = true;
@@ -30,8 +29,11 @@
 
   const layer = document.createElement('div');
 
+  const PICK = 'Market Helper: click a highlighted field to save it · Esc to cancel';
+  const NOTHING = 'Market Helper: no unsaved text fields here · Esc to cancel';
+
   const banner = document.createElement('div');
-  banner.textContent = 'Market Helper: click a highlighted field to save it · Esc to cancel';
+  banner.textContent = PICK;
   banner.style.cssText =
     'position:fixed;z-index:2147483647;pointer-events:none;top:12px;left:50%;' +
     'transform:translateX(-50%);padding:8px 14px;border-radius:999px;' +
@@ -43,6 +45,17 @@
   const overlays = new Map(); // field element -> overlay
   const fields = new Map(); // overlay -> field element
   let hovered = null;
+  let savedSelectors = [];
+
+  function isSaved(field) {
+    return savedSelectors.some((selector) => {
+      try {
+        return field.matches(selector);
+      } catch {
+        return false;
+      }
+    });
+  }
 
   function paint(overlay) {
     const r = fields.get(overlay).getBoundingClientRect();
@@ -59,6 +72,7 @@
     for (const field of document.querySelectorAll(TEXT_FIELDS)) {
       // A wrapper and its inner editor can both match; keep the inner one.
       if (field.querySelector(TEXT_FIELDS)) continue;
+      if (isSaved(field)) continue;
       const r = field.getBoundingClientRect();
       if (!r.width || !r.height) continue;
       current.add(field);
@@ -79,6 +93,7 @@
       overlays.delete(field);
       fields.delete(overlay);
     }
+    banner.textContent = overlays.size ? PICK : NOTHING;
   }
 
   function isUnique(selector) {
@@ -126,7 +141,7 @@
     setTimeout(() => banner.remove(), 2500);
   }
 
-  const timer = setInterval(sync, 400);
+  let timer = null;
 
   function stop() {
     window.__marketHelperPicking = false;
@@ -147,6 +162,8 @@
     if (site.fields.some((f) => f.selector === selector)) return false;
     site.fields.push({ id: crypto.randomUUID(), selector, label: describe(el), text: '' });
     await chrome.storage.local.set({ [SITES_KEY]: sites });
+    // Rejects when the panel is closed, which is fine.
+    chrome.runtime.sendMessage({ type: 'field-picked' }).catch(() => {});
     return true;
   }
 
@@ -174,7 +191,7 @@
     if (!field) return;
     stop();
     saveField(field).then(
-      (added) => toast(added ? 'Saved — open Market Helper to set its text' : 'That field is already saved'),
+      (added) => toast(added ? 'Saved — set its text in Market Helper' : 'That field is already saved'),
       () => toast('Market Helper could not save that field'),
     );
   }
@@ -184,5 +201,13 @@
   document.addEventListener('keydown', onKey, true);
   window.addEventListener('resize', sync);
   for (const type of POINTER_EVENTS) document.addEventListener(type, onPointer, true);
-  sync();
+
+  // Wait for the saved fields before drawing, so they never flash an overlay.
+  chrome.storage.local.get(SITES_KEY).then(({ [SITES_KEY]: sites = {} }) => {
+    if (!window.__marketHelperPicking) return;
+    const site = sites[location.hostname];
+    savedSelectors = site ? site.fields.map((f) => f.selector) : [];
+    sync();
+    timer = setInterval(sync, 400);
+  });
 })();

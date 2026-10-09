@@ -3,9 +3,15 @@
   "name": "Market Helper",
   "version": "0.1.0",
   "description": "Save sites, pick their text fields, and paste saved text into them with one click.",
-  "permissions": ["storage", "activeTab", "scripting", "clipboardRead"],
+  "permissions": ["storage", "scripting", "sidePanel", "clipboardRead"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
   "action": {
-    "default_title": "Market Helper",
-    "default_popup": "popup.html"
+    "default_title": "Market Helper"
   }
 }
