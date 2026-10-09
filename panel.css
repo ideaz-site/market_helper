@@ -53,6 +53,12 @@ button.primary {
   color: #fff;
 }
 
+button.danger {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
 button.link {
   padding: 0;
   border: 0;
@@ -60,6 +66,7 @@ button.link {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   padding: 5px 7px;

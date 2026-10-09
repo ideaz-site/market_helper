@@ -16,6 +16,8 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 3. Type the text for that field in the panel and click **Paste** (or **Paste all**).
    A field with no saved text pastes your clipboard instead.
 
+**Profiles** hold separate sets of sites, fields and text. Pick one from the dropdown at the top, or use **New**, **Rename** and **Delete**. A new profile starts as a copy of the one you're on.
+
 Sites are keyed by hostname and everything is stored locally in `chrome.storage.local`.
 The dot beside a field is green when the field is on the current page and red when it isn't.
 

@@ -1,16 +1,37 @@
-const SITES_KEY = 'sites';
+const PROFILES_KEY = 'profiles';
+const ACTIVE_KEY = 'activeProfile';
+const LEGACY_SITES_KEY = 'sites'; // pre-profile storage, migrated on first load
 
 const app = document.getElementById('app');
 const statusEl = document.getElementById('status');
 
-let sites = {};
+let profiles = {}; // id -> { id, name, sites }
+let activeId = null;
+let sites = {}; // the active profile's sites: host -> { host, addedAt, fields }
 let tab = null;
 let tabHost = null; // null when the active tab isn't a normal web page
 let editingHost = null;
 let found = {}; // field id -> whether its element is on the current page
+let profileMode = null; // null | 'new' | 'rename' | 'delete'
+let pendingRemove = null; // key of the site or field awaiting remove confirmation
 
-function saveSites() {
-  return chrome.storage.local.set({ [SITES_KEY]: sites });
+function save() {
+  return chrome.storage.local.set({ [PROFILES_KEY]: profiles, [ACTIVE_KEY]: activeId });
+}
+
+async function loadProfiles() {
+  const data = await chrome.storage.local.get([PROFILES_KEY, ACTIVE_KEY, LEGACY_SITES_KEY]);
+  profiles = data[PROFILES_KEY] || {};
+  activeId = data[ACTIVE_KEY];
+  if (!Object.keys(profiles).length) {
+    const id = crypto.randomUUID();
+    profiles[id] = { id, name: 'Default', sites: data[LEGACY_SITES_KEY] || {} };
+    activeId = id;
+    await save();
+    await chrome.storage.local.remove(LEGACY_SITES_KEY);
+  }
+  if (!profiles[activeId]) activeId = Object.keys(profiles)[0];
+  sites = profiles[activeId].sites;
 }
 
 function setStatus(message) {
@@ -108,22 +129,156 @@ async function startPicking() {
 }
 
 async function addCurrentSite() {
-  sites[tabHost] = { host: tabHost, name: tabHost, addedAt: Date.now(), fields: [] };
-  await saveSites();
-  editingHost = tabHost;
-  render();
+  sites[tabHost] = { host: tabHost, addedAt: Date.now(), fields: [] };
+  await save();
+  edit(tabHost);
 }
 
 async function removeSite(host) {
   delete sites[host];
-  await saveSites();
-  if (editingHost === host) editingHost = null;
+  await save();
+  edit(editingHost === host ? null : editingHost);
+}
+
+async function removeField(site, field) {
+  site.fields = site.fields.filter((f) => f !== field);
+  await save();
+  pendingRemove = null;
   render();
 }
 
-function renderList() {
-  app.append(el('h1', {}, 'Market Helper'));
+async function switchProfile(id) {
+  activeId = id;
+  sites = profiles[id].sites;
+  profileMode = null;
+  await save();
+  await refreshFound();
+  edit(sites[tabHost] ? tabHost : null);
+}
 
+// A new profile starts as a copy of the current one, so its sites and fields
+// carry over and only the text needs changing.
+async function createProfile(name) {
+  const id = crypto.randomUUID();
+  const from = profiles[activeId].name;
+  profiles[id] = { id, name, sites: structuredClone(sites) };
+  await switchProfile(id);
+  setStatus(`Created "${name}" as a copy of "${from}"`);
+}
+
+async function renameProfile(name) {
+  profiles[activeId].name = name;
+  profileMode = null;
+  await save();
+  render();
+}
+
+async function deleteProfile() {
+  delete profiles[activeId];
+  await switchProfile(Object.keys(profiles)[0]);
+}
+
+function setProfileMode(mode) {
+  profileMode = mode;
+  render();
+}
+
+// A Remove button that asks for a second click before doing anything.
+function removeControls(key, onConfirm) {
+  if (pendingRemove !== key) {
+    return [
+      el(
+        'button',
+        {
+          onclick: () => {
+            pendingRemove = key;
+            render();
+          },
+        },
+        'Remove',
+      ),
+    ];
+  }
+  return [
+    el(
+      'button',
+      {
+        onclick: () => {
+          pendingRemove = null;
+          render();
+        },
+      },
+      'Cancel',
+    ),
+    el('button', { className: 'danger', onclick: onConfirm }, 'Confirm remove'),
+  ];
+}
+
+function renderProfiles() {
+  const active = profiles[activeId];
+  app.append(el('h2', {}, 'Profile'));
+
+  if (profileMode === 'new' || profileMode === 'rename') {
+    const renaming = profileMode === 'rename';
+    const input = el('input', { className: 'grow', value: renaming ? active.name : '', placeholder: 'Profile name' });
+    const submit = () => {
+      const name = input.value.trim();
+      if (!name) return input.focus();
+      if (renaming) renameProfile(name);
+      else createProfile(name);
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') submit();
+      if (event.key === 'Escape') setProfileMode(null);
+    });
+    app.append(
+      el(
+        'div',
+        { className: 'row' },
+        input,
+        el('button', { className: 'primary', onclick: submit }, renaming ? 'Save' : 'Create'),
+        el('button', { onclick: () => setProfileMode(null) }, 'Cancel'),
+      ),
+    );
+    queueMicrotask(() => input.focus());
+    return;
+  }
+
+  if (profileMode === 'delete') {
+    app.append(
+      el(
+        'div',
+        { className: 'row' },
+        el('span', { className: 'grow', title: active.name }, `Delete "${active.name}" and all its sites?`),
+        el('button', { onclick: () => setProfileMode(null) }, 'Cancel'),
+        el('button', { className: 'danger', onclick: deleteProfile }, 'Delete'),
+      ),
+    );
+    return;
+  }
+
+  const select = el('select', { className: 'grow' });
+  for (const profile of Object.values(profiles)) select.append(el('option', { value: profile.id }, profile.name));
+  select.value = activeId;
+  select.addEventListener('change', () => switchProfile(select.value));
+  app.append(
+    el(
+      'div',
+      { className: 'row' },
+      select,
+      el('button', { onclick: () => setProfileMode('new') }, 'New'),
+      el('button', { onclick: () => setProfileMode('rename') }, 'Rename'),
+      el(
+        'button',
+        { disabled: Object.keys(profiles).length < 2, onclick: () => setProfileMode('delete') },
+        'Delete',
+      ),
+    ),
+  );
+}
+
+function renderList() {
+  app.append(el('h2', {}, 'This page'));
   if (!tabHost) {
     app.append(el('p', { className: 'muted' }, "This page can't be saved."));
   } else if (sites[tabHost]) {
@@ -147,7 +302,7 @@ function renderList() {
   }
 
   app.append(el('h2', {}, 'Saved sites'));
-  const saved = Object.values(sites).sort((a, b) => a.name.localeCompare(b.name));
+  const saved = Object.values(sites).sort((a, b) => a.host.localeCompare(b.host));
   if (!saved.length) app.append(el('p', { className: 'muted' }, 'No sites yet.'));
   for (const site of saved) {
     const count = `${site.fields.length} field${site.fields.length === 1 ? '' : 's'}`;
@@ -155,10 +310,10 @@ function renderList() {
       el(
         'div',
         { className: 'row site' },
-        el('span', { className: 'grow', title: site.host }, site.name),
+        el('span', { className: 'grow', title: site.host }, site.host),
         el('span', { className: 'muted' }, count),
         el('button', { onclick: () => edit(site.host) }, 'Edit'),
-        el('button', { onclick: () => removeSite(site.host) }, 'Remove'),
+        ...removeControls(`site:${site.host}`, () => removeSite(site.host)),
       ),
     );
   }
@@ -171,35 +326,23 @@ function renderField(site, field, onPage) {
     dot.title = found[field.id] ? 'Found on this page' : 'Not found on this page';
   }
 
-  const label = el('input', { className: 'grow', value: field.label, title: field.selector });
-  label.addEventListener('input', () => {
-    field.label = label.value;
-    saveSites();
-  });
-
   const text = el('textarea', { value: field.text, placeholder: 'Text to paste (leave empty to paste your clipboard)' });
   text.addEventListener('input', () => {
     field.text = text.value;
-    saveSites();
+    save();
   });
-
-  const remove = async () => {
-    site.fields = site.fields.filter((f) => f !== field);
-    await saveSites();
-    render();
-  };
 
   return el(
     'div',
     { className: 'card' },
-    el('div', { className: 'row' }, dot, label),
+    el('div', { className: 'row' }, dot, el('strong', { className: 'grow', title: field.selector }, field.label)),
     text,
     el(
       'div',
       { className: 'row' },
       el('button', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }, 'Paste'),
       el('span', { className: 'grow' }),
-      el('button', { onclick: remove }, 'Remove'),
+      ...removeControls(`field:${field.id}`, () => removeField(site, field)),
     ),
   );
 }
@@ -207,20 +350,18 @@ function renderField(site, field, onPage) {
 function renderEditor(site) {
   const onPage = site.host === tabHost;
 
-  const name = el('input', { value: site.name });
-  name.addEventListener('input', () => {
-    site.name = name.value;
-    saveSites();
-  });
-
   app.append(
-    el('button', { className: 'link', onclick: () => edit(null) }, '← All sites'),
-    el('h2', {}, 'Site name'),
-    name,
-    el('p', { className: 'muted' }, onPage ? site.host : `${site.host} — open this site to pick or paste`),
-    el('h2', {}, 'Fields'),
+    el('h2', {}, 'Site'),
+    el(
+      'div',
+      { className: 'row' },
+      el('strong', { className: 'grow', title: site.host }, site.host),
+      el('button', { className: 'link', onclick: () => edit(null) }, 'All sites'),
+    ),
   );
+  if (!onPage) app.append(el('p', { className: 'muted' }, 'Open this site to pick or paste.'));
 
+  app.append(el('h2', {}, 'Fields'));
   if (!site.fields.length) app.append(el('p', { className: 'muted' }, 'No fields yet. Pick one from the page.'));
   for (const field of site.fields) app.append(renderField(site, field, onPage));
 
@@ -241,12 +382,14 @@ function renderEditor(site) {
 
 function edit(host) {
   editingHost = host;
+  pendingRemove = null;
   render();
 }
 
 function render() {
-  app.replaceChildren();
+  app.replaceChildren(el('h1', {}, 'Market Helper'));
   setStatus('');
+  renderProfiles();
   const site = sites[editingHost];
   if (site) renderEditor(site);
   else renderList();
@@ -271,6 +414,7 @@ async function onTabChange() {
   if (tabHost !== previousHost) {
     // Land on the current site's fields when it's already saved.
     editingHost = sites[tabHost] ? tabHost : null;
+    pendingRemove = null;
   } else if (document.activeElement.matches('input, textarea')) {
     // Same site: don't redraw under someone who is typing.
     return;
@@ -279,14 +423,14 @@ async function onTabChange() {
 }
 
 async function onFieldPicked() {
-  sites = (await chrome.storage.local.get(SITES_KEY))[SITES_KEY] || {};
+  await loadProfiles();
   await refreshFound();
   render();
 }
 
 async function init() {
   await readTab();
-  sites = (await chrome.storage.local.get(SITES_KEY))[SITES_KEY] || {};
+  await loadProfiles();
   await refreshFound();
   editingHost = sites[tabHost] ? tabHost : null;
   render();

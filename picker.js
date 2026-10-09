@@ -5,7 +5,8 @@
   if (window.__marketHelperPicking) return;
   window.__marketHelperPicking = true;
 
-  const SITES_KEY = 'sites';
+  const PROFILES_KEY = 'profiles';
+  const ACTIVE_KEY = 'activeProfile';
   const TEXT_FIELDS = [
     'textarea',
     'input:not([type])',
@@ -154,14 +155,23 @@
     for (const type of POINTER_EVENTS) document.removeEventListener(type, onPointer, true);
   }
 
+  // Sites live inside whichever profile is selected in the panel.
+  async function loadSites() {
+    const data = await chrome.storage.local.get([PROFILES_KEY, ACTIVE_KEY]);
+    const profiles = data[PROFILES_KEY] || {};
+    const profile = profiles[data[ACTIVE_KEY]];
+    if (!profile) throw new Error('No active profile');
+    return { profiles, sites: profile.sites };
+  }
+
   async function saveField(el) {
     const host = location.hostname;
-    const { [SITES_KEY]: sites = {} } = await chrome.storage.local.get(SITES_KEY);
-    const site = sites[host] || (sites[host] = { host, name: host, addedAt: Date.now(), fields: [] });
+    const { profiles, sites } = await loadSites();
+    const site = sites[host] || (sites[host] = { host, addedAt: Date.now(), fields: [] });
     const selector = buildSelector(el);
     if (site.fields.some((f) => f.selector === selector)) return false;
     site.fields.push({ id: crypto.randomUUID(), selector, label: describe(el), text: '' });
-    await chrome.storage.local.set({ [SITES_KEY]: sites });
+    await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
     // Rejects when the panel is closed, which is fine.
     chrome.runtime.sendMessage({ type: 'field-picked' }).catch(() => {});
     return true;
@@ -203,11 +213,17 @@
   for (const type of POINTER_EVENTS) document.addEventListener(type, onPointer, true);
 
   // Wait for the saved fields before drawing, so they never flash an overlay.
-  chrome.storage.local.get(SITES_KEY).then(({ [SITES_KEY]: sites = {} }) => {
-    if (!window.__marketHelperPicking) return;
-    const site = sites[location.hostname];
-    savedSelectors = site ? site.fields.map((f) => f.selector) : [];
-    sync();
-    timer = setInterval(sync, 400);
-  });
+  loadSites().then(
+    ({ sites }) => {
+      if (!window.__marketHelperPicking) return;
+      const site = sites[location.hostname];
+      savedSelectors = site ? site.fields.map((f) => f.selector) : [];
+      sync();
+      timer = setInterval(sync, 400);
+    },
+    () => {
+      stop();
+      toast('Market Helper could not load your profile');
+    },
+  );
 })();
