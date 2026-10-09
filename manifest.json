@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Market Helper",
+  "version": "0.1.0",
+  "description": "Save sites, pick their text fields, and paste saved text into them with one click.",
+  "permissions": ["storage", "activeTab", "scripting", "clipboardRead"],
+  "action": {
+    "default_title": "Market Helper",
+    "default_popup": "popup.html"
+  }
+}
