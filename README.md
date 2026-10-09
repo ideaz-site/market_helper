@@ -10,7 +10,7 @@ A Chrome extension that saves sites, remembers their text fields, and pastes tex
 ## Use
 
 1. On a site, click the extension and **Add this site**.
-2. Click **Pick a field**, hover a text field on the page, and click it. Esc cancels.
+2. Click **Pick a field**. Every text field on the page gets a purple overlay that turns green on hover; click one to save it. Esc cancels.
 3. Reopen the extension, type the text for that field, and click **Paste** (or **Paste all**).
    A field with no saved text pastes your clipboard instead.
 
