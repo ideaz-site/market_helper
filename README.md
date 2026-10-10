@@ -16,6 +16,8 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 3. Type the text for that field in the panel and click **Paste** (or **Paste all**).
    A field with no saved text pastes your clipboard instead.
 
+Each field has a selector for where its text comes from: **Custom text**, which is what you type in the panel, or a catalog detail (**Catalog: Title**, **Price**, **Quantity**, **Condition** or **Description**). Catalog fields paste from the item chosen in the **Item** dropdown, so one profile can fill a listing form for any item in your catalog.
+
 **Profiles** belong to a site: each one is a separate set of fields and text for that site. Pick one from the site's dropdown, or use **New**, **Rename** and **Delete**. A new profile starts empty. When you move to another site, it opens on the profile with the same name if it has one, otherwise on its own.
 
 **All sites** lists every saved site with its profiles underneath; the arrow collapses or expands the list. Each profile has a paste icon, which fills its fields in the current tab or any open tab on that site. Drag a profile to reorder it, or click its name to edit it.

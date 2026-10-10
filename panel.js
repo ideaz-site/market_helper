@@ -8,6 +8,8 @@ const statusEl = document.getElementById('status');
 
 // host -> { host, addedAt, collapsed, activeProfile, order: [profile id],
 //           profiles: { id -> { id, name, fields } } }
+// A field is { id, selector, label, text, source }: source names the catalog
+// item detail it pastes (see ITEM_SOURCES); without one it pastes its own text.
 let sites = {};
 let view = 'sites'; // 'sites' | 'catalog' (catalog.js)
 let dragging = null; // { host, id } of the profile row being dragged
@@ -143,7 +145,14 @@ async function tabFor(host) {
 }
 
 async function pasteField(tabId, field) {
-  const text = field.text || (await navigator.clipboard.readText());
+  let text;
+  if (field.source) {
+    const item = activeItem();
+    if (!item) return 'no catalog item to paste from';
+    text = item[field.source];
+  } else {
+    text = field.text || (await navigator.clipboard.readText());
+  }
   if (!text) return 'nothing to paste';
   return (await runInPage(tabId, fillField, [field.selector, text])) ? 'pasted' : 'not on this page';
 }
@@ -412,6 +421,7 @@ function renderList() {
   app.append(el('h2', {}, 'All sites'));
   const saved = Object.values(sites).sort((a, b) => a.host.localeCompare(b.host));
   if (!saved.length) app.append(el('p', { className: 'muted' }, 'No sites yet.'));
+  if (items.length && saved.some((site) => profilesOf(site).some(usesCatalog))) app.append(itemSelect());
   for (const site of saved) {
     const toggle = site.collapsed
       ? iconButton('expand', 'Show profiles', { onclick: () => toggleCollapsed(site) })
@@ -490,11 +500,30 @@ function renderField(profile, field, onPage) {
     dot.title = found[field.id] ? 'Found on this page' : 'Not found on this page';
   }
 
-  const text = el('textarea', { value: field.text, placeholder: 'Text to paste (leave empty to paste your clipboard)' });
-  text.addEventListener('input', () => {
-    field.text = text.value;
-    save();
+  const source = el('select', { title: 'Where this field gets its text' }, el('option', { value: '' }, 'Custom text'));
+  for (const [key, label] of Object.entries(ITEM_SOURCES)) source.append(el('option', { value: key }, `Catalog: ${label}`));
+  source.value = field.source || '';
+  source.addEventListener('change', async () => {
+    field.source = source.value;
+    await save();
+    render();
   });
+
+  let text;
+  if (field.source) {
+    const item = activeItem();
+    text = el(
+      'p',
+      { className: item && item[field.source] ? 'preview' : 'preview muted' },
+      item ? item[field.source] || `"${item.title || 'Untitled item'}" has no ${ITEM_SOURCES[field.source].toLowerCase()}.` : 'Add an item in the Catalog tab first.',
+    );
+  } else {
+    text = el('textarea', { value: field.text, placeholder: 'Text to paste (leave empty to paste your clipboard)' });
+    text.addEventListener('input', () => {
+      field.text = text.value;
+      save();
+    });
+  }
 
   return el(
     'div',
@@ -507,8 +536,13 @@ function renderField(profile, field, onPage) {
       iconButton('paste', 'Paste', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }),
       ...removeControls(`field:${field.id}`, () => removeField(profile, field), true),
     ),
+    source,
     text,
   );
+}
+
+function usesCatalog(profile) {
+  return profile.fields.some((field) => field.source);
 }
 
 function renderEditor(site) {
@@ -530,6 +564,7 @@ function renderEditor(site) {
 
   app.append(el('h2', {}, 'Fields'));
   if (!profile.fields.length) app.append(el('p', { className: 'muted' }, 'No fields yet. Pick one from the page.'));
+  if (usesCatalog(profile) && items.length) app.append(itemSelect());
   for (const field of profile.fields) app.append(renderField(profile, field, onPage));
 
   app.append(

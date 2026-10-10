@@ -32,7 +32,7 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
     Each site can have several profiles, each with its own fields and text. Keep one per item you list, per message you send, or per form you fill in. Switch between them or paste any of them from the All sites list, and drag them into the order you like.
 
     CATALOG
-    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place.
+    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place. Link a saved field to an item's title, price, quantity, condition or description, then pick an item and paste its details into the form.
 
     GOOD FOR
     - Reposting marketplace and classified listings

@@ -2,11 +2,15 @@
 // its helpers (el, render, setStatus, removeControls). Item details live in
 // chrome.storage.local; photos and videos are too big for that and go in IndexedDB.
 const ITEMS_KEY = 'items';
+const ACTIVE_ITEM_KEY = 'activeItem';
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair', 'For parts'];
+// Item details a saved page field can take its text from.
+const ITEM_SOURCES = { title: 'Title', price: 'Price', quantity: 'Quantity', condition: 'Condition', description: 'Description' };
 
 // { id, title, price, quantity, condition, description, media: [{ id, kind, name }] }
 let items = [];
 let editingItemId = null;
+let activeItemId = null; // the item that catalog-linked fields paste from
 let mediaDb = null;
 let draggingMedia = null; // { itemId, id } of the photo or video tile being dragged
 const mediaUrls = new Map(); // media id -> object URL for its file
@@ -16,7 +20,26 @@ function saveItems() {
 }
 
 async function loadItems() {
-  items = (await chrome.storage.local.get(ITEMS_KEY))[ITEMS_KEY] || [];
+  const stored = await chrome.storage.local.get([ITEMS_KEY, ACTIVE_ITEM_KEY]);
+  items = stored[ITEMS_KEY] || [];
+  activeItemId = stored[ACTIVE_ITEM_KEY] || null;
+}
+
+function activeItem() {
+  return items.find((item) => item.id === activeItemId) || items[0] || null;
+}
+
+// Chooses the item that catalog-linked fields paste from.
+function itemSelect() {
+  const select = el('select', { className: 'grow' });
+  for (const item of items) select.append(el('option', { value: item.id }, item.title || 'Untitled item'));
+  select.value = activeItem().id;
+  select.addEventListener('change', async () => {
+    activeItemId = select.value;
+    await chrome.storage.local.set({ [ACTIVE_ITEM_KEY]: activeItemId });
+    render();
+  });
+  return el('label', { className: 'row' }, el('span', { className: 'muted' }, 'Item'), select);
 }
 
 function settled(request) {
