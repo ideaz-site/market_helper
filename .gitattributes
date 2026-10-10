@@ -1,0 +1,3 @@
+# Keep store submission material out of the Load unpacked zip.
+store export-ignore
+.gitattributes export-ignore
