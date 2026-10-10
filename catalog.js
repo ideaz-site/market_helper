@@ -49,8 +49,8 @@ async function deleteMedia(id) {
   mediaUrls.delete(id);
 }
 
-async function addItem() {
-  const item = {
+function blankItem() {
+  return {
     id: crypto.randomUUID(),
     title: '',
     price: '',
@@ -59,9 +59,106 @@ async function addItem() {
     description: '',
     media: [],
   };
+}
+
+async function addItem() {
+  const item = blankItem();
   items.push(item);
   await saveItems();
   editItem(item.id);
+}
+
+// CSV round trip, so items can be edited in a spreadsheet. The id column ties
+// a row back to its item, which is how photos and videos survive the trip.
+const CSV_COLUMNS = ['id', 'title', 'price', 'quantity', 'condition', 'description'];
+
+function toCsv(rows) {
+  const cell = (value) => {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  return rows.map((row) => row.map(cell).join(',')).join('\r\n');
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char !== '"') cell += char;
+      else if (text[i + 1] === '"') cell += text[i++];
+      else quoted = false;
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(cell);
+      cell = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function exportCsv() {
+  const rows = [
+    [...CSV_COLUMNS, 'media'],
+    ...items.map((item) => [...CSV_COLUMNS.map((key) => item[key]), item.media.map((m) => m.name).join('; ')]),
+  ];
+  // The BOM makes Excel read the file as UTF-8.
+  const url = URL.createObjectURL(new Blob(['﻿' + toCsv(rows)], { type: 'text/csv' }));
+  el('a', { href: url, download: 'market-helper-items.csv' }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus(`Exported ${items.length} item${items.length === 1 ? '' : 's'}`);
+}
+
+// Rows whose id matches an item update it; other rows become new items. Items
+// missing from the file are left alone, and only columns in the file are touched.
+async function importCsv(file) {
+  const rows = parseCsv((await file.text()).replace(/^﻿/, ''));
+  const header = (rows.shift() || []).map((name) => name.trim().toLowerCase());
+  const columns = CSV_COLUMNS.filter((key) => header.includes(key));
+  if (!columns.some((key) => key !== 'id')) {
+    return setStatus('No columns recognised. Expected title, price, quantity, condition or description.');
+  }
+
+  let added = 0;
+  let updated = 0;
+  for (const row of rows) {
+    const values = Object.fromEntries(columns.map((key) => [key, (row[header.indexOf(key)] ?? '').trim()]));
+    if (!columns.some((key) => key !== 'id' && values[key])) continue;
+    if ('condition' in values) {
+      const known = CONDITIONS.find((name) => name.toLowerCase() === values.condition.toLowerCase());
+      if (known) values.condition = known;
+      else delete values.condition;
+    }
+    let item = values.id && items.find((other) => other.id === values.id);
+    delete values.id;
+    if (item) {
+      updated++;
+    } else {
+      item = blankItem();
+      items.push(item);
+      added++;
+    }
+    Object.assign(item, values);
+  }
+  await saveItems();
+  render();
+  setStatus(`Imported: ${updated} updated, ${added} added`);
 }
 
 async function removeItem(item) {
@@ -134,6 +231,27 @@ function renderItemList() {
       { className: 'row' },
       el('h2', { className: 'grow' }, 'Items'),
       el('button', { className: 'primary', onclick: addItem }, 'Add item'),
+    ),
+  );
+  const csvPicker = el('input', { type: 'file', accept: '.csv,text/csv', hidden: true });
+  csvPicker.addEventListener('change', () => {
+    if (csvPicker.files[0]) importCsv(csvPicker.files[0]).catch((error) => setStatus(`Couldn't import: ${error.message}`));
+  });
+  app.append(
+    csvPicker,
+    el(
+      'div',
+      { className: 'row csv' },
+      el(
+        'button',
+        { title: 'Add or update items from a CSV file', onclick: () => csvPicker.click() },
+        'Import CSV',
+      ),
+      el(
+        'button',
+        { title: 'Download all items as a CSV file', disabled: !items.length, onclick: exportCsv },
+        'Export CSV',
+      ),
     ),
   );
   if (!items.length) app.append(el('p', { className: 'muted' }, 'No items yet.'));

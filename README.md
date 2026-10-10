@@ -31,6 +31,17 @@ The **Update** button at the top of the panel depends on how the extension was i
 
 The **Catalog** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
 
+### CSV and Google Sheets
+
+**Export CSV** downloads every item as `market-helper-items.csv`. **Import CSV** reads one back.
+
+To edit in Google Sheets: export, then in Sheets use File → Import → Upload. Edit or add rows, then File → Download → Comma-separated values, and import that file here.
+
+- Keep the `id` column. A row with an `id` updates that item and keeps its photos and videos; a row without one becomes a new item.
+- Items that aren't in the file are left as they are. Importing never deletes.
+- Only the columns in the file are changed. The `media` column lists file names for reference and is ignored on import.
+- `condition` must be one of New, Like new, Good, Fair, For parts; anything else is ignored.
+
 ## Storage
 
 Sites are keyed by hostname. Sites, profiles and item details are stored locally in `chrome.storage.local`; photos and videos are stored locally in IndexedDB.
