@@ -78,6 +78,13 @@ button.icon svg {
   height: 16px;
 }
 
+button.back {
+  margin-top: 8px;
+  align-items: center;
+  gap: 2px;
+  padding-right: 10px;
+}
+
 button.link {
   padding: 0;
   border: 0;

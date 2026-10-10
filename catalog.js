@@ -359,13 +359,12 @@ function renderItemEditor(item) {
   const media = el('div', { className: 'media' });
   for (const entry of item.media) media.append(renderMediaTile(item, entry));
 
+  const back = iconButton('back', 'Back to all items', { className: 'back', onclick: () => editItem(null) });
+  back.append('All items');
+
   app.append(
-    el(
-      'div',
-      { className: 'row' },
-      el('h2', { className: 'grow' }, 'Item'),
-      el('button', { className: 'link', onclick: () => editItem(null) }, 'All items'),
-    ),
+    el('div', { className: 'row' }, back),
+    el('h2', {}, 'Item'),
     el(
       'div',
       { className: 'stack' },
