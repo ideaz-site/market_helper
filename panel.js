@@ -575,8 +575,50 @@ function renderTabs() {
   app.append(el('div', { className: 'row' }, tabButton('sites', 'Sites'), tabButton('catalog', 'Catalog')));
 }
 
+// Chrome adds update_url to the manifest of anything installed from the store.
+const FROM_STORE = 'update_url' in chrome.runtime.getManifest();
+const VERSION = chrome.runtime.getManifest().version;
+
+// A store install asks the store for a newer version. An unpacked install can
+// only reload its own folder, so pull the new files first.
+async function updateExtension() {
+  if (!FROM_STORE) return chrome.runtime.reload();
+  setStatus('Checking for updates…');
+  try {
+    const { status, version } = await chrome.runtime.requestUpdateCheck();
+    if (status === 'update_available') {
+      setStatus(`Updating to ${version}…`);
+      return chrome.runtime.reload();
+    }
+    setStatus(
+      status === 'throttled'
+        ? 'Chrome is limiting update checks. Try again in a few minutes.'
+        : `You're on the latest version (${VERSION}).`,
+    );
+  } catch (error) {
+    setStatus(`Couldn't check for updates: ${error.message}`);
+  }
+}
+
+function renderHeader() {
+  return el(
+    'div',
+    { className: 'row header' },
+    el('h1', { className: 'grow' }, 'Market Helper'),
+    el('span', { className: 'muted' }, `v${VERSION}`),
+    el(
+      'button',
+      {
+        title: FROM_STORE ? 'Check the Chrome Web Store for a newer version' : 'Reload the extension from its folder',
+        onclick: updateExtension,
+      },
+      'Update',
+    ),
+  );
+}
+
 function render() {
-  app.replaceChildren(el('h1', {}, 'Market Helper'));
+  app.replaceChildren(renderHeader());
   setStatus('');
   renderTabs();
   if (view === 'catalog') return renderCatalog();

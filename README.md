@@ -20,6 +20,13 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 
 **All sites** lists every saved site with its profiles underneath; the arrow collapses or expands the list. Each profile has a paste icon, which fills its fields in the current tab or any open tab on that site. Drag a profile to reorder it, or click its name to edit it.
 
+## Updating
+
+The **Update** button at the top of the panel depends on how the extension was installed:
+
+- **From the Chrome Web Store:** it checks the store for a newer version and restarts into it.
+- **Load unpacked:** it reloads the extension from its folder, so pull the new files first (`git pull`), then press it and reopen the panel.
+
 ## Catalog
 
 The **Catalog** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
