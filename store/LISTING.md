@@ -4,7 +4,7 @@ Everything to paste into the Developer Dashboard, tab by tab.
 
 ## Package
 
-Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifest.json` at the top level, which the store requires. (The other zip, `market_helper-v0.1.0.zip`, is for Load unpacked.)
+Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifest.json` at the top level, which the store requires. (The other zip, `market_helper-v0.1.0.zip`, is for Load unpacked.) Build it with `store/build-zip.sh`: it drops the `nativeMessaging` permission, which is only used by the git-pull helper for unpacked installs and must not be in the store package.
 
 ## Store listing
 

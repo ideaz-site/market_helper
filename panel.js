@@ -582,8 +582,40 @@ const VERSION = chrome.runtime.getManifest().version;
 
 // A store install asks the store for a newer version. An unpacked install can
 // only reload its own folder, so pull the new files first.
+const UPDATE_NOTE_KEY = 'updateNote';
+const PULL_HOST = 'site.ideaz.market_helper';
+
+// Loaded unpacked from a git clone: a helper installed by native/install.sh runs
+// `git pull` there, then the extension reloads from the folder.
+async function pullAndReload() {
+  // The store build has no nativeMessaging permission; a plain reload is all it can do.
+  if (!chrome.runtime.sendNativeMessage) return chrome.runtime.reload();
+  setStatus('Running git pull…');
+  let reply;
+  try {
+    reply = await chrome.runtime.sendNativeMessage(PULL_HOST, {});
+  } catch (error) {
+    return setStatus(
+      /not found|forbidden/i.test(error.message)
+        ? `The git pull helper isn't set up for this copy. In the extension's folder run: native/install.sh ${chrome.runtime.id}`
+        : `Couldn't run git pull: ${error.message}`,
+    );
+  }
+  if (!reply.ok) return setStatus(`git pull failed, not reloading: ${reply.output}`);
+  // Reloading closes the panel, so the result is shown when it next opens.
+  await chrome.storage.local.set({ [UPDATE_NOTE_KEY]: `Updated. git pull: ${reply.output}` });
+  chrome.runtime.reload();
+}
+
+async function showUpdateNote() {
+  const note = (await chrome.storage.local.get(UPDATE_NOTE_KEY))[UPDATE_NOTE_KEY];
+  if (!note) return;
+  await chrome.storage.local.remove(UPDATE_NOTE_KEY);
+  setStatus(note);
+}
+
 async function updateExtension() {
-  if (!FROM_STORE) return chrome.runtime.reload();
+  if (!FROM_STORE) return pullAndReload();
   setStatus('Checking for updates…');
   try {
     const { status, version } = await chrome.runtime.requestUpdateCheck();
@@ -671,6 +703,7 @@ async function init() {
   await refreshFound();
   editingHost = sites[tabHost] ? tabHost : null;
   render();
+  showUpdateNote();
 
   chrome.tabs.onActivated.addListener(onTabChange);
   chrome.tabs.onUpdated.addListener((tabId, change) => {

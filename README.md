@@ -25,7 +25,15 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 The **Update** button at the top of the panel depends on how the extension was installed:
 
 - **From the Chrome Web Store:** it checks the store for a newer version and restarts into it.
-- **Load unpacked:** it reloads the extension from its folder, so pull the new files first (`git pull`), then press it and reopen the panel.
+- **Load unpacked from a git clone:** it runs `git pull` in the extension's folder, then reloads the extension. Reopen the panel afterwards; it shows what the pull did. If the pull fails, nothing is reloaded and the panel shows git's message.
+
+The extension can't run `git` itself, so the pull is done by a small helper that you install once on each computer:
+
+    native/install.sh
+
+It registers `native/host.py` with Chrome as a native messaging host that only this extension may call, and all it does is `git pull --ff-only` in this folder. It needs `python3` and `git`. If the Update button says the helper isn't set up, run the command it shows, which includes the extension's id. Moving the folder changes the id, so run the installer again after a move.
+
+The Web Store package is built by `store/build-zip.sh`, which leaves out the helper and the `nativeMessaging` permission.
 
 ## Catalog
 
