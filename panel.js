@@ -1,37 +1,63 @@
-const PROFILES_KEY = 'profiles';
-const ACTIVE_KEY = 'activeProfile';
-const LEGACY_SITES_KEY = 'sites'; // pre-profile storage, migrated on first load
+const SITES_KEY = 'sites';
+// Earlier builds kept profiles globally, each with its own sites. Migrated on load.
+const OLD_PROFILES_KEY = 'profiles';
+const OLD_ACTIVE_KEY = 'activeProfile';
 
 const app = document.getElementById('app');
 const statusEl = document.getElementById('status');
 
-let profiles = {}; // id -> { id, name, sites }
-let activeId = null;
-let sites = {}; // the active profile's sites: host -> { host, addedAt, fields }
+// host -> { host, addedAt, activeProfile, profiles: { id -> { id, name, fields } } }
+let sites = {};
 let tab = null;
 let tabHost = null; // null when the active tab isn't a normal web page
 let editingHost = null;
 let found = {}; // field id -> whether its element is on the current page
 let profileMode = null; // null | 'new' | 'rename' | 'delete'
 let pendingRemove = null; // key of the site or field awaiting remove confirmation
+// Name of the profile the user last chose. A site that has a profile with the
+// same name opens on it; any other site just shows its own profile.
+let stickyName = null;
 
 function save() {
-  return chrome.storage.local.set({ [PROFILES_KEY]: profiles, [ACTIVE_KEY]: activeId });
+  return chrome.storage.local.set({ [SITES_KEY]: sites });
 }
 
-async function loadProfiles() {
-  const data = await chrome.storage.local.get([PROFILES_KEY, ACTIVE_KEY, LEGACY_SITES_KEY]);
-  profiles = data[PROFILES_KEY] || {};
-  activeId = data[ACTIVE_KEY];
-  if (!Object.keys(profiles).length) {
+function activeProfile(site) {
+  return site.profiles[site.activeProfile];
+}
+
+async function loadSites() {
+  const data = await chrome.storage.local.get([SITES_KEY, OLD_PROFILES_KEY, OLD_ACTIVE_KEY]);
+  sites = data[SITES_KEY] || {};
+  let migrated = false;
+
+  // First build: fields sat directly on the site.
+  for (const site of Object.values(sites)) {
+    if (site.profiles) continue;
     const id = crypto.randomUUID();
-    profiles[id] = { id, name: 'Default', sites: data[LEGACY_SITES_KEY] || {} };
-    activeId = id;
-    await save();
-    await chrome.storage.local.remove(LEGACY_SITES_KEY);
+    site.profiles = { [id]: { id, name: 'Default', fields: site.fields || [] } };
+    site.activeProfile = id;
+    delete site.fields;
+    delete site.name;
+    migrated = true;
   }
-  if (!profiles[activeId]) activeId = Object.keys(profiles)[0];
-  sites = profiles[activeId].sites;
+
+  // Second build: global profiles. Each becomes a same-named profile on its sites.
+  for (const old of Object.values(data[OLD_PROFILES_KEY] || {})) {
+    for (const oldSite of Object.values(old.sites || {})) {
+      const { host } = oldSite;
+      const site = sites[host] || (sites[host] = { host, addedAt: oldSite.addedAt, activeProfile: null, profiles: {} });
+      const id = crypto.randomUUID();
+      site.profiles[id] = { id, name: old.name, fields: oldSite.fields || [] };
+      if (!site.activeProfile || old.id === data[OLD_ACTIVE_KEY]) site.activeProfile = id;
+    }
+    migrated = true;
+  }
+
+  if (migrated) {
+    await save();
+    await chrome.storage.local.remove([OLD_PROFILES_KEY, OLD_ACTIVE_KEY]);
+  }
 }
 
 function setStatus(message) {
@@ -76,44 +102,58 @@ function findFields(selectors) {
   });
 }
 
-async function runInPage(func, args) {
-  const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func, args });
+async function runInPage(tabId, func, args) {
+  const [injection] = await chrome.scripting.executeScript({ target: { tabId }, func, args });
   return injection.result;
 }
 
 async function refreshFound() {
   found = {};
   const site = sites[tabHost];
-  if (!site || !site.fields.length) return;
+  if (!site) return;
+  const { fields } = activeProfile(site);
+  if (!fields.length) return;
   try {
-    const results = await runInPage(findFields, [site.fields.map((f) => f.selector)]);
-    site.fields.forEach((field, i) => (found[field.id] = results[i]));
+    const results = await runInPage(tab.id, findFields, [fields.map((f) => f.selector)]);
+    fields.forEach((field, i) => (found[field.id] = results[i]));
   } catch {
     // Pages like the Chrome Web Store refuse injection; leave the dots neutral.
   }
 }
 
-async function pasteField(field) {
+// The current tab when it's on this site, otherwise any open tab that is.
+async function tabFor(host) {
+  if (host === tabHost) return tab.id;
+  const [match] = await chrome.tabs.query({ url: `*://${host}/*` });
+  return match ? match.id : null;
+}
+
+async function pasteField(tabId, field) {
   const text = field.text || (await navigator.clipboard.readText());
   if (!text) return 'nothing to paste';
-  return (await runInPage(fillField, [field.selector, text])) ? 'pasted' : 'not on this page';
+  return (await runInPage(tabId, fillField, [field.selector, text])) ? 'pasted' : 'not on this page';
 }
 
 async function pasteOne(field) {
   try {
-    setStatus(`${field.label}: ${await pasteField(field)}`);
+    setStatus(`${field.label}: ${await pasteField(tab.id, field)}`);
   } catch (error) {
     setStatus(`Couldn't paste: ${error.message}`);
   }
 }
 
-async function pasteAll(site) {
-  let pasted = 0;
+// Pastes every field of the site's selected profile.
+async function pasteSite(site) {
+  const profile = activeProfile(site);
+  if (!profile.fields.length) return setStatus(`"${profile.name}" has no fields on ${site.host}`);
   try {
-    for (const field of site.fields) {
-      if ((await pasteField(field)) === 'pasted') pasted++;
+    const tabId = await tabFor(site.host);
+    if (tabId === null) return setStatus(`Open ${site.host} in a tab first`);
+    let pasted = 0;
+    for (const field of profile.fields) {
+      if ((await pasteField(tabId, field)) === 'pasted') pasted++;
     }
-    setStatus(`Pasted ${pasted} of ${site.fields.length} fields`);
+    setStatus(`Pasted ${pasted} of ${profile.fields.length} fields from "${profile.name}" on ${site.host}`);
   } catch (error) {
     setStatus(`Couldn't paste: ${error.message}`);
   }
@@ -129,7 +169,13 @@ async function startPicking() {
 }
 
 async function addCurrentSite() {
-  sites[tabHost] = { host: tabHost, addedAt: Date.now(), fields: [] };
+  const id = crypto.randomUUID();
+  sites[tabHost] = {
+    host: tabHost,
+    addedAt: Date.now(),
+    activeProfile: id,
+    profiles: { [id]: { id, name: 'Default', fields: [] } },
+  };
   await save();
   edit(tabHost);
 }
@@ -140,47 +186,62 @@ async function removeSite(host) {
   edit(editingHost === host ? null : editingHost);
 }
 
-async function removeField(site, field) {
-  site.fields = site.fields.filter((f) => f !== field);
+async function removeField(profile, field) {
+  profile.fields = profile.fields.filter((f) => f !== field);
   await save();
   pendingRemove = null;
   render();
 }
 
-async function switchProfile(id) {
-  activeId = id;
-  sites = profiles[id].sites;
+async function selectProfile(site, id) {
+  site.activeProfile = id;
+  stickyName = activeProfile(site).name;
   profileMode = null;
+  pendingRemove = null;
   await save();
-  await refreshFound();
-  edit(sites[tabHost] ? tabHost : null);
+  if (site.host === tabHost) await refreshFound();
+  render();
 }
 
-// A new profile starts as a copy of the current one, so its sites and fields
-// carry over and only the text needs changing.
-async function createProfile(name) {
+// A new profile starts empty: no fields, no text.
+function createProfile(site, name) {
   const id = crypto.randomUUID();
-  const from = profiles[activeId].name;
-  profiles[id] = { id, name, sites: structuredClone(sites) };
-  await switchProfile(id);
-  setStatus(`Created "${name}" as a copy of "${from}"`);
+  site.profiles[id] = { id, name, fields: [] };
+  return selectProfile(site, id);
 }
 
-async function renameProfile(name) {
-  profiles[activeId].name = name;
+async function renameProfile(site, name) {
+  activeProfile(site).name = name;
+  stickyName = name;
   profileMode = null;
   await save();
   render();
 }
 
-async function deleteProfile() {
-  delete profiles[activeId];
-  await switchProfile(Object.keys(profiles)[0]);
+function deleteProfile(site) {
+  delete site.profiles[site.activeProfile];
+  return selectProfile(site, Object.keys(site.profiles)[0]);
 }
 
 function setProfileMode(mode) {
   profileMode = mode;
   render();
+}
+
+// Opens the site on the profile the user last chose, when it has one by that name.
+function adoptStickyProfile(site) {
+  const match = Object.values(site.profiles).find((p) => p.name === stickyName);
+  if (!match || match.id === site.activeProfile) return false;
+  site.activeProfile = match.id;
+  return true;
+}
+
+function profileSelect(site) {
+  const select = el('select', { className: 'grow' });
+  for (const profile of Object.values(site.profiles)) select.append(el('option', { value: profile.id }, profile.name));
+  select.value = site.activeProfile;
+  select.addEventListener('change', () => selectProfile(site, select.value));
+  return select;
 }
 
 // A Remove button that asks for a second click before doing anything.
@@ -214,8 +275,8 @@ function removeControls(key, onConfirm) {
   ];
 }
 
-function renderProfiles() {
-  const active = profiles[activeId];
+function renderProfiles(site) {
+  const active = activeProfile(site);
   app.append(el('h2', {}, 'Profile'));
 
   if (profileMode === 'new' || profileMode === 'rename') {
@@ -224,8 +285,10 @@ function renderProfiles() {
     const submit = () => {
       const name = input.value.trim();
       if (!name) return input.focus();
-      if (renaming) renameProfile(name);
-      else createProfile(name);
+      const taken = Object.values(site.profiles).some((p) => p.name === name && !(renaming && p === active));
+      if (taken) return setStatus(`This site already has a profile called "${name}"`);
+      if (renaming) renameProfile(site, name);
+      else createProfile(site, name);
     };
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') submit();
@@ -249,28 +312,24 @@ function renderProfiles() {
       el(
         'div',
         { className: 'row' },
-        el('span', { className: 'grow', title: active.name }, `Delete "${active.name}" and all its sites?`),
+        el('span', { className: 'grow', title: active.name }, `Delete "${active.name}" and its fields?`),
         el('button', { onclick: () => setProfileMode(null) }, 'Cancel'),
-        el('button', { className: 'danger', onclick: deleteProfile }, 'Delete'),
+        el('button', { className: 'danger', onclick: () => deleteProfile(site) }, 'Delete'),
       ),
     );
     return;
   }
 
-  const select = el('select', { className: 'grow' });
-  for (const profile of Object.values(profiles)) select.append(el('option', { value: profile.id }, profile.name));
-  select.value = activeId;
-  select.addEventListener('change', () => switchProfile(select.value));
   app.append(
     el(
       'div',
       { className: 'row' },
-      select,
+      profileSelect(site),
       el('button', { onclick: () => setProfileMode('new') }, 'New'),
       el('button', { onclick: () => setProfileMode('rename') }, 'Rename'),
       el(
         'button',
-        { disabled: Object.keys(profiles).length < 2, onclick: () => setProfileMode('delete') },
+        { disabled: Object.keys(site.profiles).length < 2, onclick: () => setProfileMode('delete') },
         'Delete',
       ),
     ),
@@ -301,25 +360,33 @@ function renderList() {
     );
   }
 
-  app.append(el('h2', {}, 'Saved sites'));
+  app.append(el('h2', {}, 'All sites'));
   const saved = Object.values(sites).sort((a, b) => a.host.localeCompare(b.host));
   if (!saved.length) app.append(el('p', { className: 'muted' }, 'No sites yet.'));
   for (const site of saved) {
-    const count = `${site.fields.length} field${site.fields.length === 1 ? '' : 's'}`;
     app.append(
       el(
         'div',
-        { className: 'row site' },
-        el('span', { className: 'grow', title: site.host }, site.host),
-        el('span', { className: 'muted' }, count),
-        el('button', { onclick: () => edit(site.host) }, 'Edit'),
-        ...removeControls(`site:${site.host}`, () => removeSite(site.host)),
+        { className: 'card' },
+        el(
+          'div',
+          { className: 'row' },
+          el('strong', { className: 'grow', title: site.host }, site.host),
+          el('button', { onclick: () => edit(site.host) }, 'Edit'),
+          ...removeControls(`site:${site.host}`, () => removeSite(site.host)),
+        ),
+        el(
+          'div',
+          { className: 'row' },
+          profileSelect(site),
+          el('button', { className: 'primary', onclick: () => pasteSite(site) }, 'Paste'),
+        ),
       ),
     );
   }
 }
 
-function renderField(site, field, onPage) {
+function renderField(profile, field, onPage) {
   const dot = el('span', { className: 'dot' });
   if (onPage && field.id in found) {
     dot.classList.add(found[field.id] ? 'found' : 'missing');
@@ -342,13 +409,14 @@ function renderField(site, field, onPage) {
       { className: 'row' },
       el('button', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }, 'Paste'),
       el('span', { className: 'grow' }),
-      ...removeControls(`field:${field.id}`, () => removeField(site, field)),
+      ...removeControls(`field:${field.id}`, () => removeField(profile, field)),
     ),
   );
 }
 
 function renderEditor(site) {
   const onPage = site.host === tabHost;
+  const profile = activeProfile(site);
 
   app.append(
     el('h2', {}, 'Site'),
@@ -359,11 +427,13 @@ function renderEditor(site) {
       el('button', { className: 'link', onclick: () => edit(null) }, 'All sites'),
     ),
   );
-  if (!onPage) app.append(el('p', { className: 'muted' }, 'Open this site to pick or paste.'));
+  if (!onPage) app.append(el('p', { className: 'muted' }, 'Open this site to pick fields.'));
+
+  renderProfiles(site);
 
   app.append(el('h2', {}, 'Fields'));
-  if (!site.fields.length) app.append(el('p', { className: 'muted' }, 'No fields yet. Pick one from the page.'));
-  for (const field of site.fields) app.append(renderField(site, field, onPage));
+  if (!profile.fields.length) app.append(el('p', { className: 'muted' }, 'No fields yet. Pick one from the page.'));
+  for (const field of profile.fields) app.append(renderField(profile, field, onPage));
 
   app.append(
     el(
@@ -373,23 +443,28 @@ function renderEditor(site) {
       el('span', { className: 'grow' }),
       el(
         'button',
-        { className: 'primary', disabled: !onPage || !site.fields.length, onclick: () => pasteAll(site) },
+        { className: 'primary', disabled: !onPage || !profile.fields.length, onclick: () => pasteSite(site) },
         'Paste all',
       ),
     ),
   );
 }
 
-function edit(host) {
+async function edit(host) {
   editingHost = host;
   pendingRemove = null;
+  profileMode = null;
+  const site = sites[host];
+  if (site && adoptStickyProfile(site)) {
+    await save();
+    if (host === tabHost) await refreshFound();
+  }
   render();
 }
 
 function render() {
   app.replaceChildren(el('h1', {}, 'Market Helper'));
   setStatus('');
-  renderProfiles();
   const site = sites[editingHost];
   if (site) renderEditor(site);
   else renderList();
@@ -410,27 +485,30 @@ async function readTab() {
 async function onTabChange() {
   const previousHost = tabHost;
   await readTab();
-  await refreshFound();
   if (tabHost !== previousHost) {
     // Land on the current site's fields when it's already saved.
     editingHost = sites[tabHost] ? tabHost : null;
     pendingRemove = null;
-  } else if (document.activeElement.matches('input, textarea')) {
+    profileMode = null;
+    if (sites[tabHost] && adoptStickyProfile(sites[tabHost])) await save();
+    await refreshFound();
+  } else {
+    await refreshFound();
     // Same site: don't redraw under someone who is typing.
-    return;
+    if (document.activeElement.matches('input, textarea')) return;
   }
   render();
 }
 
 async function onFieldPicked() {
-  await loadProfiles();
+  await loadSites();
   await refreshFound();
   render();
 }
 
 async function init() {
   await readTab();
-  await loadProfiles();
+  await loadSites();
   await refreshFound();
   editingHost = sites[tabHost] ? tabHost : null;
   render();

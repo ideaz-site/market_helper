@@ -5,8 +5,7 @@
   if (window.__marketHelperPicking) return;
   window.__marketHelperPicking = true;
 
-  const PROFILES_KEY = 'profiles';
-  const ACTIVE_KEY = 'activeProfile';
+  const SITES_KEY = 'sites';
   const TEXT_FIELDS = [
     'textarea',
     'input:not([type])',
@@ -155,23 +154,21 @@
     for (const type of POINTER_EVENTS) document.removeEventListener(type, onPointer, true);
   }
 
-  // Sites live inside whichever profile is selected in the panel.
-  async function loadSites() {
-    const data = await chrome.storage.local.get([PROFILES_KEY, ACTIVE_KEY]);
-    const profiles = data[PROFILES_KEY] || {};
-    const profile = profiles[data[ACTIVE_KEY]];
-    if (!profile) throw new Error('No active profile');
-    return { profiles, sites: profile.sites };
+  // Fields go into whichever profile is selected for this site in the panel.
+  async function loadProfile() {
+    const { [SITES_KEY]: sites = {} } = await chrome.storage.local.get(SITES_KEY);
+    const site = sites[location.hostname];
+    const profile = site && site.profiles && site.profiles[site.activeProfile];
+    if (!profile) throw new Error('Site is not saved');
+    return { sites, profile };
   }
 
   async function saveField(el) {
-    const host = location.hostname;
-    const { profiles, sites } = await loadSites();
-    const site = sites[host] || (sites[host] = { host, addedAt: Date.now(), fields: [] });
+    const { sites, profile } = await loadProfile();
     const selector = buildSelector(el);
-    if (site.fields.some((f) => f.selector === selector)) return false;
-    site.fields.push({ id: crypto.randomUUID(), selector, label: describe(el), text: '' });
-    await chrome.storage.local.set({ [PROFILES_KEY]: profiles });
+    if (profile.fields.some((f) => f.selector === selector)) return false;
+    profile.fields.push({ id: crypto.randomUUID(), selector, label: describe(el), text: '' });
+    await chrome.storage.local.set({ [SITES_KEY]: sites });
     // Rejects when the panel is closed, which is fine.
     chrome.runtime.sendMessage({ type: 'field-picked' }).catch(() => {});
     return true;
@@ -213,17 +210,16 @@
   for (const type of POINTER_EVENTS) document.addEventListener(type, onPointer, true);
 
   // Wait for the saved fields before drawing, so they never flash an overlay.
-  loadSites().then(
-    ({ sites }) => {
+  loadProfile().then(
+    ({ profile }) => {
       if (!window.__marketHelperPicking) return;
-      const site = sites[location.hostname];
-      savedSelectors = site ? site.fields.map((f) => f.selector) : [];
+      savedSelectors = profile.fields.map((f) => f.selector);
       sync();
       timer = setInterval(sync, 400);
     },
     () => {
       stop();
-      toast('Market Helper could not load your profile');
+      toast('Market Helper: add this site in the panel first');
     },
   );
 })();
