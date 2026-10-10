@@ -244,33 +244,43 @@ function profileSelect(site) {
   return select;
 }
 
+const ICONS = {
+  paste: '<path d="M9 5H6v15h12V5h-3"/><path d="M9 3.5h6v3H9z"/>',
+  remove: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+  confirm: '<path d="M5 12l5 5 9-10"/>',
+  cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
+};
+
+function iconButton(icon, label, props) {
+  const button = el('button', { title: label, ariaLabel: label, ...props });
+  button.classList.add('icon');
+  button.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[icon]}</svg>`;
+  return button;
+}
+
 // A Remove button that asks for a second click before doing anything.
-function removeControls(key, onConfirm) {
+function removeControls(key, onConfirm, icons = false) {
+  const ask = () => {
+    pendingRemove = key;
+    render();
+  };
+  const cancel = () => {
+    pendingRemove = null;
+    render();
+  };
   if (pendingRemove !== key) {
+    return [icons ? iconButton('remove', 'Remove', { onclick: ask }) : el('button', { onclick: ask }, 'Remove')];
+  }
+  if (icons) {
     return [
-      el(
-        'button',
-        {
-          onclick: () => {
-            pendingRemove = key;
-            render();
-          },
-        },
-        'Remove',
-      ),
+      iconButton('cancel', 'Cancel', { onclick: cancel }),
+      iconButton('confirm', 'Confirm remove', { className: 'danger', onclick: onConfirm }),
     ];
   }
   return [
-    el(
-      'button',
-      {
-        onclick: () => {
-          pendingRemove = null;
-          render();
-        },
-      },
-      'Cancel',
-    ),
+    el('button', { onclick: cancel }, 'Cancel'),
     el('button', { className: 'danger', onclick: onConfirm }, 'Confirm remove'),
   ];
 }
@@ -402,15 +412,15 @@ function renderField(profile, field, onPage) {
   return el(
     'div',
     { className: 'card' },
-    el('div', { className: 'row' }, dot, el('strong', { className: 'grow', title: field.selector }, field.label)),
-    text,
     el(
       'div',
       { className: 'row' },
-      el('button', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }, 'Paste'),
-      el('span', { className: 'grow' }),
-      ...removeControls(`field:${field.id}`, () => removeField(profile, field)),
+      dot,
+      el('strong', { className: 'grow', title: field.selector }, field.label),
+      iconButton('paste', 'Paste', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }),
+      ...removeControls(`field:${field.id}`, () => removeField(profile, field), true),
     ),
+    text,
   );
 }
 

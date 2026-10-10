@@ -59,6 +59,17 @@ button.danger {
   color: #fff;
 }
 
+button.icon {
+  display: inline-flex;
+  flex: none;
+  padding: 4px;
+}
+
+button.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 button.link {
   padding: 0;
   border: 0;
