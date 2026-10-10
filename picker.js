@@ -21,24 +21,34 @@
     '[role="textbox"]',
   ].join(',');
   const POINTER_EVENTS = ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup'];
-  const IDLE = 'border:2px solid #7c3aed;background:rgba(124,58,237,.2);';
-  const HOVER = 'border:2px solid #16a34a;background:rgba(22,163,74,.35);';
+  const IDLE = 'border:3px solid #7c3aed;background:rgba(124,58,237,.2);';
+  const HOVER = 'border:3px solid #16a34a;background:rgba(22,163,74,.35);';
   const OVERLAY =
     'position:fixed;z-index:2147483646;box-sizing:border-box;margin:0;padding:0;' +
     'border-radius:4px;cursor:pointer;pointer-events:auto;';
 
   const layer = document.createElement('div');
 
-  const PICK = 'Market Helper: click a highlighted field to save it · Esc to cancel';
-  const NOTHING = 'Market Helper: no unsaved text fields here · Esc to cancel';
+  const PICK = 'Click the box you want Market Helper to fill in';
+  const NOTHING = 'No more boxes to choose on this page';
 
   const banner = document.createElement('div');
-  banner.textContent = PICK;
   banner.style.cssText =
-    'position:fixed;z-index:2147483647;pointer-events:none;top:12px;left:50%;' +
-    'transform:translateX(-50%);padding:8px 14px;border-radius:999px;' +
-    'background:#7c3aed;color:#fff;font:13px/1.3 system-ui,sans-serif;' +
+    'position:fixed;z-index:2147483647;pointer-events:auto;top:12px;left:50%;' +
+    'transform:translateX(-50%);display:flex;align-items:center;gap:12px;' +
+    'max-width:calc(100vw - 24px);padding:10px 12px 10px 18px;border-radius:999px;' +
+    'background:#7c3aed;color:#fff;font:16px/1.3 system-ui,sans-serif;' +
     'box-shadow:0 2px 10px rgba(0,0,0,.3);';
+  const bannerText = document.createElement('span');
+  bannerText.textContent = PICK;
+  // Not everyone knows Esc, so the banner carries its own way out.
+  const stopButton = document.createElement('button');
+  stopButton.type = 'button';
+  stopButton.textContent = 'Stop';
+  stopButton.style.cssText =
+    'padding:6px 14px;border:1px solid #fff;border-radius:999px;background:transparent;' +
+    'color:#fff;font:inherit;cursor:pointer;';
+  banner.append(bannerText, stopButton);
 
   document.documentElement.append(layer, banner);
 
@@ -93,7 +103,7 @@
       overlays.delete(field);
       fields.delete(overlay);
     }
-    banner.textContent = overlays.size ? PICK : NOTHING;
+    bannerText.textContent = overlays.size ? PICK : NOTHING;
   }
 
   function isUnique(selector) {
@@ -137,8 +147,9 @@
   }
 
   function toast(message) {
-    banner.textContent = message;
-    setTimeout(() => banner.remove(), 2500);
+    bannerText.textContent = message;
+    stopButton.remove();
+    setTimeout(() => banner.remove(), 4000);
   }
 
   let timer = null;
@@ -167,10 +178,11 @@
     const { sites, profile } = await loadProfile();
     const selector = buildSelector(el);
     if (profile.fields.some((f) => f.selector === selector)) return false;
-    profile.fields.push({ id: crypto.randomUUID(), selector, label: describe(el), text: '' });
+    const label = describe(el);
+    profile.fields.push({ id: crypto.randomUUID(), selector, label, text: '' });
     await chrome.storage.local.set({ [SITES_KEY]: sites });
     // Rejects when the panel is closed, which is fine.
-    chrome.runtime.sendMessage({ type: 'field-picked' }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'field-picked', label }).catch(() => {});
     return true;
   }
 
@@ -181,12 +193,17 @@
     if (hovered) paint(hovered);
   }
 
+  function cancel() {
+    stop();
+    banner.remove();
+    chrome.runtime.sendMessage({ type: 'picking-stopped' }).catch(() => {});
+  }
+
   function onKey(event) {
     if (event.key !== 'Escape') return;
     event.preventDefault();
     event.stopPropagation();
-    stop();
-    banner.remove();
+    cancel();
   }
 
   // Swallow every pointer event so the page doesn't react while picking.
@@ -194,12 +211,13 @@
     event.preventDefault();
     event.stopPropagation();
     if (event.type !== 'click') return;
+    if (event.target === stopButton) return cancel();
     const field = fields.get(event.target);
     if (!field) return;
     stop();
     saveField(field).then(
-      (added) => toast(added ? 'Saved — set its text in Market Helper' : 'That field is already saved'),
-      () => toast('Market Helper could not save that field'),
+      (added) => toast(added ? 'Saved. Now say what goes in it in the Market Helper panel.' : 'That box is already saved.'),
+      () => toast("Market Helper couldn't save that box."),
     );
   }
 
@@ -219,7 +237,7 @@
     },
     () => {
       stop();
-      toast('Market Helper: add this site in the panel first');
+      toast('Save this website in the Market Helper panel first.');
     },
   );
 })();

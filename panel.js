@@ -76,14 +76,26 @@ function profilesOf(site) {
   return site.order.map((id) => site.profiles[id]);
 }
 
-function setStatus(message) {
-  statusEl.textContent = message;
+// kind 'ok' or 'error' marks an outcome; anything else is a plain hint.
+function setStatus(message, kind = '') {
+  const mark = { ok: '✓ ', error: '⚠ ' }[kind] || '';
+  statusEl.textContent = message && mark + message;
+  statusEl.className = kind;
 }
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
   node.append(...children);
   return node;
+}
+
+// Interface text with **bold** markers, as nodes.
+function rich(text) {
+  return text.split('**').map((part, i) => (i % 2 ? el('strong', {}, part) : part));
+}
+
+function boxes(count) {
+  return `${count} ${count === 1 ? 'box' : 'boxes'}`;
 }
 
 // Runs in the page. Sets the value the way a user edit would, so frameworks
@@ -144,49 +156,72 @@ async function tabFor(host) {
   return match ? match.id : null;
 }
 
+// Fills one box and says how it went: 'filled', 'clipboard' (the box has no
+// text of its own, so it got the clipboard), 'missing', 'empty' or 'noitem'.
 async function pasteField(tabId, field) {
   let text;
+  let result = 'filled';
   if (field.source) {
     const item = activeItem();
-    if (!item) return 'no catalog item to paste from';
+    if (!item) return 'noitem';
     text = item[field.source];
+  } else if (field.text) {
+    text = field.text;
   } else {
-    text = field.text || (await navigator.clipboard.readText());
+    text = await navigator.clipboard.readText();
+    result = 'clipboard';
   }
-  if (!text) return 'nothing to paste';
-  return (await runInPage(tabId, fillField, [field.selector, text])) ? 'pasted' : 'not on this page';
+  if (!text) return 'empty';
+  return (await runInPage(tabId, fillField, [field.selector, text])) ? result : 'missing';
 }
 
 async function pasteOne(field) {
   try {
-    setStatus(`${field.label}: ${await pasteField(tab.id, field)}`);
+    const result = await pasteField(tab.id, field);
+    const messages = {
+      filled: `Filled in "${field.label}"`,
+      clipboard: `Filled in "${field.label}" with what you last copied`,
+      missing: `The "${field.label}" box isn't on this page`,
+      empty: field.source
+        ? `The chosen item has no ${ITEM_SOURCES[field.source].toLowerCase()} yet`
+        : `Nothing to fill in for "${field.label}". Type some text first.`,
+      noitem: 'Add an item under My items first',
+    };
+    setStatus(messages[result], result === 'filled' || result === 'clipboard' ? 'ok' : 'error');
   } catch (error) {
-    setStatus(`Couldn't paste: ${error.message}`);
+    setStatus(`Couldn't fill in the page: ${error.message}`, 'error');
   }
 }
 
-// Pastes every field of one of the site's profiles.
+// Fills in every box of one of the site's templates (profiles in the code).
 async function pasteProfile(site, profile) {
-  if (!profile.fields.length) return setStatus(`"${profile.name}" has no fields on ${site.host}`);
+  const total = profile.fields.length;
+  if (!total) return setStatus(`"${profile.name}" has no boxes yet. Open ${site.host} and choose some.`, 'error');
   try {
     const tabId = await tabFor(site.host);
-    if (tabId === null) return setStatus(`Open ${site.host} in a tab first`);
-    let pasted = 0;
+    if (tabId === null) return setStatus(`Open ${site.host} in a tab first, then press Fill in again.`, 'error');
+    let filled = 0;
     for (const field of profile.fields) {
-      if ((await pasteField(tabId, field)) === 'pasted') pasted++;
+      const result = await pasteField(tabId, field);
+      if (result === 'filled' || result === 'clipboard') filled++;
     }
-    setStatus(`Pasted ${pasted} of ${profile.fields.length} fields from "${profile.name}" on ${site.host}`);
+    const rest = total - filled;
+    setStatus(
+      `Filled in ${filled} of ${boxes(total)} on ${site.host}.` +
+        (rest ? ` The other ${rest} had nothing to fill in or ${rest === 1 ? "isn't" : "aren't"} on this page.` : ''),
+      filled ? 'ok' : 'error',
+    );
   } catch (error) {
-    setStatus(`Couldn't paste: ${error.message}`);
+    setStatus(`Couldn't fill in the page: ${error.message}`, 'error');
   }
 }
 
 async function startPicking() {
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['picker.js'] });
-    setStatus('Click a highlighted field on the page. Esc cancels.');
+    setStatus('Now click one of the purple boxes on the page. Press Stop or Esc to finish.');
   } catch (error) {
-    setStatus(`Can't pick on this page: ${error.message}`);
+    setStatus(`Chrome doesn't let Market Helper work on this page. Try an ordinary website. (${error.message})`, 'error');
   }
 }
 
@@ -217,6 +252,7 @@ async function removeField(profile, field) {
 }
 
 async function selectProfile(site, id) {
+  setStatus('');
   site.activeProfile = id;
   stickyName = activeProfile(site).name;
   profileMode = null;
@@ -282,7 +318,7 @@ function adoptStickyProfile(site) {
 }
 
 function profileSelect(site) {
-  const select = el('select', { className: 'grow' });
+  const select = el('select', { className: 'grow', ariaLabel: 'Template' });
   for (const profile of profilesOf(site)) select.append(el('option', { value: profile.id }, profile.name));
   select.value = site.activeProfile;
   select.addEventListener('change', () => selectProfile(site, select.value));
@@ -293,10 +329,7 @@ const ICONS = {
   back: '<path d="M15 6l-6 6 6 6"/>',
   expand: '<path d="M9 6l6 6-6 6"/>',
   collapse: '<path d="M6 9l6 6 6-6"/>',
-  paste: '<path d="M9 5H6v15h12V5h-3"/><path d="M9 3.5h6v3H9z"/>',
   remove: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
-  confirm: '<path d="M5 12l5 5 9-10"/>',
-  cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
 };
 
 function iconButton(icon, label, props) {
@@ -308,8 +341,9 @@ function iconButton(icon, label, props) {
   return button;
 }
 
-// A Remove button that asks for a second click before doing anything.
-function removeControls(key, onConfirm, icons = false) {
+// A Remove button that asks in words before doing anything. The question takes
+// a line of its own, so the row it sits in wraps.
+function removeControls(key, onConfirm, { icon = false, label = 'Remove', question = 'Remove this?', yes = 'Yes, remove' } = {}) {
   const ask = () => {
     pendingRemove = key;
     render();
@@ -319,32 +353,38 @@ function removeControls(key, onConfirm, icons = false) {
     render();
   };
   if (pendingRemove !== key) {
-    return [icons ? iconButton('remove', 'Remove', { onclick: ask }) : el('button', { onclick: ask }, 'Remove')];
-  }
-  if (icons) {
-    return [
-      iconButton('cancel', 'Cancel', { onclick: cancel }),
-      iconButton('confirm', 'Confirm remove', { className: 'danger', onclick: onConfirm }),
-    ];
+    return [icon ? iconButton('remove', label, { onclick: ask }) : el('button', { onclick: ask }, label)];
   }
   return [
-    el('button', { onclick: cancel }, 'Cancel'),
-    el('button', { className: 'danger', onclick: onConfirm }, 'Confirm remove'),
+    el(
+      'div',
+      { className: 'row confirm' },
+      el('span', { className: 'ask' }, question),
+      el('button', { onclick: cancel }, 'Keep'),
+      el('button', { className: 'danger', onclick: onConfirm }, yes),
+    ),
   ];
 }
 
+// "Template" is the interface's word for a profile.
 function renderProfiles(site) {
   const active = activeProfile(site);
-  app.append(el('h2', {}, 'Profile'));
+  const several = site.order.length > 1;
+  app.append(el('h2', {}, several ? 'Templates for this website' : 'Template'));
 
   if (profileMode === 'new' || profileMode === 'rename') {
     const renaming = profileMode === 'rename';
-    const input = el('input', { className: 'grow', value: renaming ? active.name : '', placeholder: 'Profile name' });
+    const input = el('input', {
+      className: 'grow',
+      value: renaming ? active.name : '',
+      placeholder: 'Name, for example Bike or Table',
+      ariaLabel: 'Template name',
+    });
     const submit = () => {
       const name = input.value.trim();
       if (!name) return input.focus();
       const taken = Object.values(site.profiles).some((p) => p.name === name && !(renaming && p === active));
-      if (taken) return setStatus(`This site already has a profile called "${name}"`);
+      if (taken) return setStatus(`There's already a template called "${name}" for this website.`, 'error');
       if (renaming) renameProfile(site, name);
       else createProfile(site, name);
     };
@@ -357,7 +397,7 @@ function renderProfiles(site) {
         'div',
         { className: 'row' },
         input,
-        el('button', { className: 'primary', onclick: submit }, renaming ? 'Save' : 'Create'),
+        el('button', { className: 'primary', onclick: submit }, 'Save'),
         el('button', { onclick: () => setProfileMode(null) }, 'Cancel'),
       ),
     );
@@ -369,10 +409,23 @@ function renderProfiles(site) {
     app.append(
       el(
         'div',
-        { className: 'row' },
-        el('span', { className: 'grow', title: active.name }, `Delete "${active.name}" and its fields?`),
-        el('button', { onclick: () => setProfileMode(null) }, 'Cancel'),
+        { className: 'row confirm' },
+        el('span', { className: 'ask' }, `Delete the "${active.name}" template and its ${boxes(active.fields.length)}?`),
+        el('button', { onclick: () => setProfileMode(null) }, 'Keep'),
         el('button', { className: 'danger', onclick: () => deleteProfile(site) }, 'Delete'),
+      ),
+    );
+    return;
+  }
+
+  if (!several) {
+    app.append(
+      el(
+        'div',
+        { className: 'row' },
+        el('span', { className: 'grow', title: active.name }, active.name),
+        el('button', { className: 'link', onclick: () => setProfileMode('rename') }, 'Rename'),
+        el('button', { className: 'link', onclick: () => setProfileMode('new') }, 'Add another'),
       ),
     );
     return;
@@ -380,31 +433,53 @@ function renderProfiles(site) {
 
   app.append(
     el(
+      'p',
+      { className: 'hint' },
+      'A template is one set of boxes and text for this website. Use one for each kind of listing.',
+    ),
+    el('div', { className: 'row' }, profileSelect(site)),
+    el(
       'div',
-      { className: 'row' },
-      profileSelect(site),
+      { className: 'row equal' },
       el('button', { onclick: () => setProfileMode('new') }, 'New'),
       el('button', { onclick: () => setProfileMode('rename') }, 'Rename'),
-      el(
-        'button',
-        { disabled: Object.keys(site.profiles).length < 2, onclick: () => setProfileMode('delete') },
-        'Delete',
-      ),
+      el('button', { onclick: () => setProfileMode('delete') }, 'Delete'),
+    ),
+  );
+}
+
+function howItWorks() {
+  return el(
+    'div',
+    {},
+    el(
+      'ol',
+      { className: 'steps' },
+      el('li', {}, ...rich('Go to the website where you post listings, then press **Save this website**.')),
+      el('li', {}, ...rich('Press **Choose a box on the page** and click a box on the page, such as Title or Price.')),
+      el('li', {}, ...rich("Type what should go in each box. From then on, press **Fill in the page** and it's typed in for you.")),
+    ),
+    el(
+      'p',
+      { className: 'hint' },
+      ...rich('Optional: under **My items**, save the things you sell, so their title, price and description can fill in boxes on any website.'),
     ),
   );
 }
 
 function renderList() {
-  app.append(el('h2', {}, 'This page'));
+  app.append(el('h2', {}, 'This website'));
   if (!tabHost) {
-    app.append(el('p', { className: 'muted' }, "This page can't be saved."));
+    app.append(
+      el('p', { className: 'hint' }, 'Market Helper works on ordinary web pages. Go to the website where you post listings.'),
+    );
   } else if (sites[tabHost]) {
     app.append(
       el(
         'div',
         { className: 'row' },
-        el('span', { className: 'grow' }, `${tabHost} is saved`),
-        el('button', { className: 'primary', onclick: () => edit(tabHost) }, 'Edit'),
+        el('span', { className: 'grow', title: tabHost }, `You're on ${tabHost}`),
+        el('button', { className: 'primary', onclick: () => edit(tabHost) }, 'Open'),
       ),
     );
   } else {
@@ -412,20 +487,24 @@ function renderList() {
       el(
         'div',
         { className: 'row' },
-        el('span', { className: 'grow' }, tabHost),
-        el('button', { className: 'primary', onclick: addCurrentSite }, 'Add this site'),
+        el('span', { className: 'grow', title: tabHost }, tabHost),
+        el('button', { className: 'primary', onclick: addCurrentSite }, 'Save this website'),
       ),
     );
   }
 
-  app.append(el('h2', {}, 'All sites'));
   const saved = Object.values(sites).sort((a, b) => a.host.localeCompare(b.host));
-  if (!saved.length) app.append(el('p', { className: 'muted' }, 'No sites yet.'));
+  if (!saved.length) {
+    app.append(el('h2', {}, 'How it works'), howItWorks());
+    return;
+  }
+
+  app.append(el('h2', {}, 'All my websites'));
   if (items.length && saved.some((site) => profilesOf(site).some(usesCatalog))) app.append(itemSelect());
   for (const site of saved) {
     const toggle = site.collapsed
-      ? iconButton('expand', 'Show profiles', { onclick: () => toggleCollapsed(site) })
-      : iconButton('collapse', 'Hide profiles', { onclick: () => toggleCollapsed(site) });
+      ? iconButton('expand', 'Show templates', { onclick: () => toggleCollapsed(site) })
+      : iconButton('collapse', 'Hide templates', { onclick: () => toggleCollapsed(site) });
     const card = el(
       'div',
       { className: 'card' },
@@ -434,29 +513,40 @@ function renderList() {
         { className: 'row' },
         toggle,
         el('strong', { className: 'grow', title: site.host }, site.host),
-        el('button', { onclick: () => edit(site.host) }, 'Edit'),
-        ...removeControls(`site:${site.host}`, () => removeSite(site.host)),
+        el('button', { onclick: () => edit(site.host) }, 'Open'),
+        ...removeControls(`site:${site.host}`, () => removeSite(site.host), {
+          icon: true,
+          label: `Remove ${site.host}`,
+          question: `Remove ${site.host} and its templates?`,
+        }),
       ),
     );
-    if (!site.collapsed) card.append(...profilesOf(site).map((profile) => renderProfileRow(site, profile)));
+    if (!site.collapsed) {
+      card.append(...profilesOf(site).map((profile) => renderProfileRow(site, profile)));
+      if (site.order.length > 1) card.append(el('p', { className: 'hint' }, 'Drag ⠿ to change the order.'));
+    }
     app.append(card);
   }
+  app.append(el('details', { className: 'more' }, el('summary', {}, 'How does this work?'), howItWorks()));
 }
 
-// One profile in the All sites list: drag to reorder, click the name to edit.
+// One template in the websites list: drag to reorder, click the name to open it.
 function renderProfileRow(site, profile) {
-  const count = `${profile.fields.length} field${profile.fields.length === 1 ? '' : 's'}`;
   const row = el(
     'div',
     { className: 'row profile', draggable: true },
-    el('span', { className: 'grip', title: 'Drag to reorder' }, '⠿'),
+    el('span', { className: 'grip', title: 'Drag to change the order' }, '⠿'),
     el(
       'button',
-      { className: 'link grow', title: `Edit ${profile.name}`, onclick: () => openProfile(site, profile.id) },
+      { className: 'link grow', title: `Open ${profile.name}`, onclick: () => openProfile(site, profile.id) },
       profile.name,
     ),
-    el('span', { className: 'muted' }, count),
-    iconButton('paste', `Paste ${profile.name}`, { className: 'primary', onclick: () => pasteProfile(site, profile) }),
+    el('span', { className: 'muted' }, boxes(profile.fields.length)),
+    el(
+      'button',
+      { className: 'primary', title: `Fill in the page using "${profile.name}"`, onclick: () => pasteProfile(site, profile) },
+      'Fill in',
+    ),
   );
 
   const isTarget = () => dragging && dragging.host === site.host && dragging.id !== profile.id;
@@ -495,50 +585,79 @@ function renderProfileRow(site, profile) {
 
 function renderField(profile, field, onPage) {
   const dot = el('span', { className: 'dot' });
+  const missing = onPage && found[field.id] === false;
   if (onPage && field.id in found) {
-    dot.classList.add(found[field.id] ? 'found' : 'missing');
-    dot.title = found[field.id] ? 'Found on this page' : 'Not found on this page';
+    dot.classList.add(missing ? 'missing' : 'found');
+    dot.title = missing ? 'Not on this page' : 'On this page';
   }
 
-  const source = el('select', { title: 'Where this field gets its text' }, el('option', { value: '' }, 'Custom text'));
-  for (const [key, label] of Object.entries(ITEM_SOURCES)) source.append(el('option', { value: key }, `Catalog: ${label}`));
-  source.value = field.source || '';
-  source.addEventListener('change', async () => {
-    field.source = source.value;
-    await save();
-    render();
-  });
-
-  let text;
-  if (field.source) {
-    const item = activeItem();
-    text = el(
-      'p',
-      { className: item && item[field.source] ? 'preview' : 'preview muted' },
-      item ? item[field.source] || `"${item.title || 'Untitled item'}" has no ${ITEM_SOURCES[field.source].toLowerCase()}.` : 'Add an item in the Catalog tab first.',
-    );
-  } else {
-    text = el('textarea', { value: field.text, placeholder: 'Text to paste (leave empty to paste your clipboard)' });
-    text.addEventListener('input', () => {
-      field.text = text.value;
-      save();
-    });
-  }
-
-  return el(
+  const card = el(
     'div',
     { className: 'card' },
     el(
       'div',
       { className: 'row' },
       dot,
-      el('strong', { className: 'grow', title: field.selector }, field.label),
-      iconButton('paste', 'Paste', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }),
-      ...removeControls(`field:${field.id}`, () => removeField(profile, field), true),
+      el('strong', { className: 'grow', title: field.label }, field.label),
+      el('button', { className: 'primary', disabled: !onPage, onclick: () => pasteOne(field) }, 'Fill in'),
+      ...removeControls(`field:${field.id}`, () => removeField(profile, field), {
+        icon: true,
+        label: 'Remove this box',
+        question: 'Remove this box?',
+      }),
     ),
-    source,
-    text,
   );
+
+  // Choosing a source only means something once there are items to take it from.
+  if (items.length || field.source) {
+    const source = el('select', {}, el('option', { value: '' }, 'Text I type here'));
+    for (const [key, label] of Object.entries(ITEM_SOURCES)) {
+      source.append(el('option', { value: key }, `The item's ${label.toLowerCase()}`));
+    }
+    source.value = field.source || '';
+    source.addEventListener('change', async () => {
+      field.source = source.value;
+      await save();
+      render();
+    });
+    card.append(el('label', { className: 'field' }, el('span', {}, 'Fill this box with'), source));
+  }
+
+  if (field.source) {
+    const item = activeItem();
+    const detail = ITEM_SOURCES[field.source].toLowerCase();
+    card.append(
+      el(
+        'p',
+        { className: item && item[field.source] ? 'preview' : 'preview muted' },
+        item
+          ? item[field.source] || `"${itemName(item)}" has no ${detail} yet. Add one under My items.`
+          : 'Add an item under My items first.',
+      ),
+    );
+  } else {
+    const text = el('textarea', {
+      value: field.text,
+      placeholder: 'Type what should go in this box',
+      ariaLabel: `Text for ${field.label}`,
+    });
+    text.addEventListener('input', () => {
+      field.text = text.value;
+      save();
+    });
+    card.append(text);
+  }
+
+  if (missing) {
+    card.append(
+      el(
+        'p',
+        { className: 'warn' },
+        "This box isn't on the page right now. Go to the page that has it, or remove it and choose it again if the website changed.",
+      ),
+    );
+  }
+  return card;
 }
 
 function usesCatalog(profile) {
@@ -549,40 +668,46 @@ function renderEditor(site) {
   const onPage = site.host === tabHost;
   const profile = activeProfile(site);
 
-  app.append(
-    el('h2', {}, 'Site'),
-    el(
-      'div',
-      { className: 'row' },
-      el('strong', { className: 'grow', title: site.host }, site.host),
-      el('button', { className: 'link', onclick: () => edit(null) }, 'All sites'),
-    ),
-  );
-  if (!onPage) app.append(el('p', { className: 'muted' }, 'Open this site to pick fields.'));
+  const back = iconButton('back', 'Back to all websites', { className: 'back', onclick: () => edit(null) });
+  back.append('All websites');
+  app.append(el('div', { className: 'row' }, back), el('h2', { className: 'name', title: site.host }, site.host));
+  if (!onPage) {
+    app.append(el('p', { className: 'hint' }, ...rich(`Go to **${site.host}** in your browser to choose boxes or fill them in.`)));
+  }
 
   renderProfiles(site);
 
-  app.append(el('h2', {}, 'Fields'));
-  if (!profile.fields.length) app.append(el('p', { className: 'muted' }, 'No fields yet. Pick one from the page.'));
-  if (usesCatalog(profile) && items.length) app.append(itemSelect());
-  for (const field of profile.fields) app.append(renderField(profile, field, onPage));
+  app.append(el('h2', {}, 'Boxes to fill in'));
+  const pick = el('button', { disabled: !onPage, onclick: startPicking }, 'Choose a box on the page');
+  if (!profile.fields.length) {
+    pick.className = 'primary big';
+    app.append(
+      el(
+        'p',
+        { className: 'hint' },
+        ...rich('No boxes yet. Press **Choose a box on the page**, then click the box on the page you want filled in, for example the Title box.'),
+      ),
+      el('div', { className: 'stack' }, pick),
+    );
+    return;
+  }
 
+  if (usesCatalog(profile) && items.length) app.append(itemSelect());
+  // The everyday action goes above the boxes, where it's seen without scrolling.
   app.append(
     el(
       'div',
-      { className: 'row' },
-      el('button', { disabled: !onPage, onclick: startPicking }, 'Pick a field'),
-      el('span', { className: 'grow' }),
-      el(
-        'button',
-        { className: 'primary', disabled: !onPage || !profile.fields.length, onclick: () => pasteProfile(site, profile) },
-        'Paste all',
-      ),
+      { className: 'stack fill' },
+      el('button', { className: 'primary big', disabled: !onPage, onclick: () => pasteProfile(site, profile) }, 'Fill in the page'),
     ),
   );
+  for (const field of profile.fields) app.append(renderField(profile, field, onPage));
+  pick.textContent = 'Choose another box on the page';
+  app.append(el('div', { className: 'stack' }, pick));
 }
 
 async function edit(host) {
+  setStatus('');
   editingHost = host;
   pendingRemove = null;
   profileMode = null;
@@ -600,15 +725,17 @@ function renderTabs() {
       'button',
       {
         className: view === name ? 'grow primary' : 'grow',
+        ariaPressed: String(view === name),
         onclick: () => {
           view = name;
           pendingRemove = null;
+          setStatus('');
           render();
         },
       },
       label,
     );
-  app.append(el('div', { className: 'row' }, tabButton('sites', 'Sites'), tabButton('catalog', 'Catalog')));
+  app.append(el('div', { className: 'row tabs' }, tabButton('sites', 'Websites'), tabButton('catalog', 'My items')));
 }
 
 // Chrome adds update_url to the manifest of anything installed from the store.
@@ -625,7 +752,7 @@ const PULL_HOST = 'site.ideaz.market_helper';
 async function pullAndReload() {
   // The store build has no nativeMessaging permission; a plain reload is all it can do.
   if (!chrome.runtime.sendNativeMessage) return chrome.runtime.reload();
-  setStatus('Running git pull…');
+  setStatus('Getting the latest files…');
   let reply;
   try {
     reply = await chrome.runtime.sendNativeMessage(PULL_HOST, {});
@@ -634,9 +761,10 @@ async function pullAndReload() {
       /not found|forbidden/i.test(error.message)
         ? `The git pull helper isn't set up for this copy. In the extension's folder run: native/install.sh ${chrome.runtime.id}`
         : `Couldn't run git pull: ${error.message}`,
+      'error',
     );
   }
-  if (!reply.ok) return setStatus(`git pull failed, not reloading: ${reply.output}`);
+  if (!reply.ok) return setStatus(`Couldn't get the latest files, so nothing changed: ${reply.output}`, 'error');
   // Reloading closes the panel, so the result is shown when it next opens.
   await chrome.storage.local.set({ [UPDATE_NOTE_KEY]: `Updated. git pull: ${reply.output}` });
   chrome.runtime.reload();
@@ -646,7 +774,7 @@ async function showUpdateNote() {
   const note = (await chrome.storage.local.get(UPDATE_NOTE_KEY))[UPDATE_NOTE_KEY];
   if (!note) return;
   await chrome.storage.local.remove(UPDATE_NOTE_KEY);
-  setStatus(note);
+  setStatus(note, 'ok');
 }
 
 async function updateExtension() {
@@ -655,44 +783,49 @@ async function updateExtension() {
   try {
     const { status, version } = await chrome.runtime.requestUpdateCheck();
     if (status === 'update_available') {
-      setStatus(`Updating to ${version}…`);
+      setStatus(`Updating to version ${version}…`);
       return chrome.runtime.reload();
     }
     setStatus(
       status === 'throttled'
         ? 'Chrome is limiting update checks. Try again in a few minutes.'
-        : `You're on the latest version (${VERSION}).`,
+        : `You have the latest version (${VERSION}).`,
     );
   } catch (error) {
-    setStatus(`Couldn't check for updates: ${error.message}`);
+    setStatus(`Couldn't check for updates: ${error.message}`, 'error');
   }
 }
 
 function renderHeader() {
+  return el('div', { className: 'header' }, el('h1', {}, 'Market Helper'));
+}
+
+// Version and updates are maintenance, so they sit out of the way at the bottom.
+function renderFooter() {
   return el(
-    'div',
-    { className: 'row header' },
-    el('h1', { className: 'grow' }, 'Market Helper'),
-    el('span', { className: 'muted' }, `v${VERSION}`),
+    'p',
+    { className: 'footer' },
+    `Version ${VERSION} · `,
     el(
       'button',
       {
-        title: FROM_STORE ? 'Check the Chrome Web Store for a newer version' : 'Reload the extension from its folder',
+        className: 'link',
+        title: FROM_STORE ? 'See if a newer version is available' : 'Get the latest files and reload the extension',
         onclick: updateExtension,
       },
-      'Update',
+      'Check for updates',
     ),
   );
 }
 
 function render() {
   app.replaceChildren(renderHeader());
-  setStatus('');
   renderTabs();
-  if (view === 'catalog') return renderCatalog();
   const site = sites[editingHost];
-  if (site) renderEditor(site);
+  if (view === 'catalog') renderCatalog();
+  else if (site) renderEditor(site);
   else renderList();
+  app.append(renderFooter());
 }
 
 async function readTab() {
@@ -715,6 +848,7 @@ async function onTabChange() {
     editingHost = sites[tabHost] ? tabHost : null;
     pendingRemove = null;
     profileMode = null;
+    setStatus('');
     if (sites[tabHost] && adoptStickyProfile(sites[tabHost])) await save();
     await refreshFound();
   } else {
@@ -725,10 +859,11 @@ async function onTabChange() {
   render();
 }
 
-async function onFieldPicked() {
+async function onFieldPicked(label) {
   await loadSites();
   await refreshFound();
   render();
+  setStatus(`Saved the "${label}" box. Now say what goes in it below.`, 'ok');
 }
 
 async function init() {
@@ -745,7 +880,8 @@ async function init() {
     if (tab && tabId === tab.id && (change.url || change.status === 'complete')) onTabChange();
   });
   chrome.runtime.onMessage.addListener((message) => {
-    if (message && message.type === 'field-picked') onFieldPicked();
+    if (message && message.type === 'field-picked') onFieldPicked(message.label);
+    if (message && message.type === 'picking-stopped') setStatus('');
   });
 }
 

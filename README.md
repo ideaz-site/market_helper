@@ -9,22 +9,24 @@ A Chrome extension that saves sites, remembers their text fields, and pastes tex
 
 ## Use
 
-Clicking the extension opens it in Chrome's side panel, which stays open while you use the page.
+Clicking the extension opens it in Chrome's side panel, which stays open while you use the page. The panel uses everyday words; the code calls a "box" a field and a "template" a profile.
 
-1. On a site, click the extension and **Add this site**.
-2. Click **Pick a field**. Every text field that isn't saved yet gets a purple overlay that turns green on hover; click one to save it. Esc cancels.
-3. Type the text for that field in the panel and click **Paste** (or **Paste all**).
-   A field with no saved text pastes your clipboard instead.
+1. On a website, click the extension and press **Save this website**.
+2. Press **Choose a box on the page**. Every text box that isn't saved yet gets a purple overlay that turns green on hover; click one to save it. **Stop** in the banner, or Esc, cancels.
+3. Type what should go in that box, then press **Fill in** beside it, or **Fill in the page** for all of them.
+   A box with no text is filled with whatever you last copied.
 
-Each field has a selector for where its text comes from: **Custom text**, which is what you type in the panel, or a catalog detail (**Catalog: Title**, **Price**, **Quantity**, **Condition** or **Description**). Catalog fields paste from the item chosen in the **Item** dropdown, so one profile can fill a listing form for any item in your catalog.
+Messages about what just happened appear in a bar pinned to the bottom of the panel.
 
-**Profiles** belong to a site: each one is a separate set of fields and text for that site. Pick one from the site's dropdown, or use **New**, **Rename** and **Delete**. A new profile starts empty. When you move to another site, it opens on the profile with the same name if it has one, otherwise on its own.
+Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition or description). Item details come from the item chosen under **Fill in using this item**, so one template can fill a listing form for any of your items.
 
-**All sites** lists every saved site with its profiles underneath; the arrow collapses or expands the list. Each profile has a paste icon, which fills its fields in the current tab or any open tab on that site. Drag a profile to reorder it, or click its name to edit it.
+**Templates** belong to a website: each one is a separate set of boxes and text for it. A website starts with one; **Add another** makes more, and then you can switch between them, rename and delete them. A new template starts empty. When you move to another website, it opens on the template with the same name if it has one, otherwise on its own.
+
+**All my websites** lists every saved website with its templates underneath; the arrow hides or shows them. **Fill in** beside a template fills its boxes in the current tab or any open tab on that website. Drag a template to reorder it, or click its name to open it. Removing anything asks first.
 
 ## Updating
 
-The **Update** button at the top of the panel depends on how the extension was installed:
+**Check for updates** at the bottom of the panel depends on how the extension was installed:
 
 - **From the Chrome Web Store:** it checks the store for a newer version and restarts into it.
 - **Load unpacked from a git clone:** it runs `git pull` in the extension's folder, then reloads the extension. Reopen the panel afterwards; it shows what the pull did. If the pull fails, nothing is reloaded and the panel shows git's message.
@@ -33,34 +35,34 @@ The extension can't run `git` itself, so the pull is done by a small helper that
 
     native/install.sh
 
-It registers `native/host.py` with Chrome as a native messaging host that only this extension may call, and all it does is `git pull --ff-only` in this folder. It needs `python3` and `git`. If the Update button says the helper isn't set up, run the command it shows, which includes the extension's id. Moving the folder changes the id, so run the installer again after a move.
+It registers `native/host.py` with Chrome as a native messaging host that only this extension may call, and all it does is `git pull --ff-only` in this folder. It needs `python3` and `git`. If Check for updates says the helper isn't set up, run the command it shows, which includes the extension's id. Moving the folder changes the id, so run the installer again after a move.
 
 The Web Store package is built by `store/build-zip.sh`, which leaves out the helper and the `nativeMessaging` permission.
 
-## Catalog
+## My items
 
-The **Catalog** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
+The **My items** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
 
-Each photo and video is labelled **Photo** or **Video**, and videos also show a play symbol. Drag one to reorder; the first is the item's thumbnail in the list.
+Each photo and video is labelled **Photo** or **Video**, and videos also show a play symbol. Drag one to reorder, or press **Make main** under it to move it to the front; the first is the item's thumbnail in the list.
 
-### CSV and Google Sheets
+### Spreadsheets and Google Sheets
 
-**Export CSV** downloads every item as `market-helper-items.csv`. **Import CSV** reads one back.
+Under **Spreadsheet (advanced)** at the bottom of My items, **Save to file** downloads every item as `market-helper-items.csv` and **Load from file…** reads one back.
 
-To edit in Google Sheets: export, then in Sheets use File → Import → Upload. Edit or add rows, then File → Download → Comma-separated values, and import that file here.
+To edit in Google Sheets: save to a file, then in Sheets use File → Import → Upload. Edit or add rows, then File → Download → Comma-separated values, and load that file here.
 
 - Keep the `id` column. A row with an `id` updates that item and keeps its photos and videos; a row without one becomes a new item.
-- Items that aren't in the file are left as they are. Importing never deletes.
-- Only the columns in the file are changed. The `media` column lists file names for reference and is ignored on import.
+- Items that aren't in the file are left as they are. Loading a file never deletes.
+- Only the columns in the file are changed. The `media` column lists file names for reference and is ignored when loading.
 - `condition` must be one of New, Like new, Good, Fair, For parts; anything else is ignored.
 
 ## Storage
 
 Sites are keyed by hostname. Sites, profiles and item details are stored locally in `chrome.storage.local`; photos and videos are stored locally in IndexedDB.
-The dot beside a field is green when the field is on the current page and red when it isn't.
+The dot beside a box is green when the box is on the current page and red when it isn't.
 
 ## Limits
 
-- Fields inside iframes can't be picked.
-- A field with no stable attribute (name, aria-label, placeholder, test id, id) is matched by its position in the page, which breaks if the page layout changes.
+- Boxes inside iframes can't be chosen.
+- A box with no stable attribute (name, aria-label, placeholder, test id, id) is matched by its position in the page, which breaks if the page layout changes.
 - Because the panel follows you across tabs, the extension asks for access to all sites.

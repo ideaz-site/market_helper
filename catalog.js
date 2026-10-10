@@ -25,21 +25,25 @@ async function loadItems() {
   activeItemId = stored[ACTIVE_ITEM_KEY] || null;
 }
 
+function itemName(item) {
+  return item.title || 'Item with no name';
+}
+
 function activeItem() {
   return items.find((item) => item.id === activeItemId) || items[0] || null;
 }
 
 // Chooses the item that catalog-linked fields paste from.
 function itemSelect() {
-  const select = el('select', { className: 'grow' });
-  for (const item of items) select.append(el('option', { value: item.id }, item.title || 'Untitled item'));
+  const select = el('select');
+  for (const item of items) select.append(el('option', { value: item.id }, itemName(item)));
   select.value = activeItem().id;
   select.addEventListener('change', async () => {
     activeItemId = select.value;
     await chrome.storage.local.set({ [ACTIVE_ITEM_KEY]: activeItemId });
     render();
   });
-  return el('label', { className: 'row' }, el('span', { className: 'muted' }, 'Item'), select);
+  return el('label', { className: 'field pick' }, el('span', {}, 'Fill in using this item'), select);
 }
 
 function settled(request) {
@@ -146,7 +150,7 @@ function exportCsv() {
   const url = URL.createObjectURL(new Blob(['﻿' + toCsv(rows)], { type: 'text/csv' }));
   el('a', { href: url, download: 'market-helper-items.csv' }).click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  setStatus(`Exported ${items.length} item${items.length === 1 ? '' : 's'}`);
+  setStatus(`Saved ${items.length} item${items.length === 1 ? '' : 's'} to market-helper-items.csv in your Downloads folder`, 'ok');
 }
 
 // Rows whose id matches an item update it; other rows become new items. Items
@@ -156,7 +160,10 @@ async function importCsv(file) {
   const header = (rows.shift() || []).map((name) => name.trim().toLowerCase());
   const columns = CSV_COLUMNS.filter((key) => header.includes(key));
   if (!columns.some((key) => key !== 'id')) {
-    return setStatus('No columns recognised. Expected title, price, quantity, condition or description.');
+    return setStatus(
+      "That file doesn't look like a Market Helper spreadsheet. It needs columns named title, price, quantity, condition or description.",
+      'error',
+    );
   }
 
   let added = 0;
@@ -182,7 +189,7 @@ async function importCsv(file) {
   }
   await saveItems();
   render();
-  setStatus(`Imported: ${updated} updated, ${added} added`);
+  setStatus(`Loaded the file: ${added} new, ${updated} updated`, 'ok');
 }
 
 async function removeItem(item) {
@@ -209,7 +216,7 @@ async function addMedia(item, files) {
   }
   await saveItems();
   render();
-  if (failure) setStatus(`Couldn't save that file: ${failure.message}`);
+  if (failure) setStatus(`Couldn't add that photo or video: ${failure.message}`, 'error');
 }
 
 async function removeMedia(item, media) {
@@ -234,13 +241,13 @@ async function moveMedia(item, id, targetId, after) {
 }
 
 function editItem(id) {
+  setStatus('');
   editingItemId = id;
   pendingRemove = null;
   render();
 }
 
 function mediaThumb(media) {
-  if (!media) return el('div', { className: 'thumb' });
   const node = el(media.kind === 'video' ? 'video' : 'img', { className: 'thumb', title: media.name, draggable: false });
   if (media.kind === 'video') {
     node.muted = true;
@@ -263,11 +270,28 @@ function renderMediaTile(item, entry) {
     el('span', { className: `badge ${entry.kind}` }, video ? 'Video' : 'Photo'),
   );
   if (video) frame.append(el('span', { className: 'play' }));
+  const first = item.media[0];
   const tile = el(
     'div',
-    { className: 'tile', draggable: true, title: `${entry.name} (drag to reorder)` },
+    { className: 'tile', draggable: true, title: `${entry.name}. Drag to change the order.` },
     frame,
-    el('div', { className: 'row' }, ...removeControls(`media:${entry.id}`, () => removeMedia(item, entry), true)),
+    entry === first
+      ? el('span', { className: 'hint' }, 'Main')
+      : el(
+          'button',
+          { className: 'link', title: 'Show this one first', onclick: () => moveMedia(item, entry.id, first.id, false) },
+          'Make main',
+        ),
+    el(
+      'div',
+      { className: 'row' },
+      ...removeControls(`media:${entry.id}`, () => removeMedia(item, entry), {
+        icon: true,
+        label: `Remove this ${video ? 'video' : 'photo'}`,
+        question: 'Remove?',
+        yes: 'Remove',
+      }),
+    ),
   );
 
   const isTarget = () => draggingMedia && draggingMedia.itemId === item.id && draggingMedia.id !== entry.id;
@@ -305,7 +329,7 @@ function renderMediaTile(item, entry) {
 }
 
 function itemSummary(item) {
-  return [item.price && `$${item.price}`, `Qty ${item.quantity || 0}`, item.condition].filter(Boolean).join(' · ');
+  return [item.price && `$${item.price}`, `Quantity ${item.quantity || 0}`, item.condition].filter(Boolean).join(' · ');
 }
 
 function renderItemList() {
@@ -313,32 +337,19 @@ function renderItemList() {
     el(
       'div',
       { className: 'row' },
-      el('h2', { className: 'grow' }, 'Items'),
-      el('button', { className: 'primary', onclick: addItem }, 'Add item'),
+      el('h2', { className: 'grow' }, 'My items'),
+      el('button', { className: 'primary', onclick: addItem }, 'Add an item'),
     ),
   );
-  const csvPicker = el('input', { type: 'file', accept: '.csv,text/csv', hidden: true });
-  csvPicker.addEventListener('change', () => {
-    if (csvPicker.files[0]) importCsv(csvPicker.files[0]).catch((error) => setStatus(`Couldn't import: ${error.message}`));
-  });
-  app.append(
-    csvPicker,
-    el(
-      'div',
-      { className: 'row csv' },
+  if (!items.length) {
+    app.append(
       el(
-        'button',
-        { title: 'Add or update items from a CSV file', onclick: () => csvPicker.click() },
-        'Import CSV',
+        'p',
+        { className: 'hint' },
+        ...rich("Your items are the things you sell. Press **Add an item** and type its title, price and description. Any website's boxes can then be filled in from the item you choose."),
       ),
-      el(
-        'button',
-        { title: 'Download all items as a CSV file', disabled: !items.length, onclick: exportCsv },
-        'Export CSV',
-      ),
-    ),
-  );
-  if (!items.length) app.append(el('p', { className: 'muted' }, 'No items yet.'));
+    );
+  }
   for (const item of items) {
     app.append(
       el(
@@ -347,19 +358,56 @@ function renderItemList() {
         el(
           'div',
           { className: 'row' },
-          mediaThumb(item.media[0]),
+          item.media[0]
+            ? mediaThumb(item.media[0])
+            : el('div', { className: 'thumb letter' }, (item.title.trim()[0] || '?').toUpperCase()),
           el(
             'div',
             { className: 'grow' },
-            el('strong', { className: 'line' }, item.title || 'Untitled item'),
+            el('strong', { className: 'line' }, itemName(item)),
             el('span', { className: 'line muted' }, itemSummary(item)),
           ),
-          el('button', { onclick: () => editItem(item.id) }, 'Edit'),
-          ...removeControls(`item:${item.id}`, () => removeItem(item), true),
+          el('button', { onclick: () => editItem(item.id) }, 'Open'),
+          ...removeControls(`item:${item.id}`, () => removeItem(item), {
+            icon: true,
+            label: `Delete ${itemName(item)}`,
+            question: `Delete "${itemName(item)}" and its photos?`,
+            yes: 'Delete',
+          }),
         ),
       ),
     );
   }
+
+  const csvPicker = el('input', { type: 'file', accept: '.csv,text/csv', hidden: true });
+  csvPicker.addEventListener('change', () => {
+    if (csvPicker.files[0]) {
+      importCsv(csvPicker.files[0]).catch((error) => setStatus(`Couldn't load that file: ${error.message}`, 'error'));
+    }
+  });
+  app.append(
+    csvPicker,
+    el(
+      'details',
+      { className: 'more' },
+      el('summary', {}, 'Spreadsheet (advanced)'),
+      el(
+        'p',
+        { className: 'hint' },
+        'Save all items to a file you can open in Excel or Google Sheets, or load a file back in.',
+      ),
+      el(
+        'div',
+        { className: 'row equal' },
+        el(
+          'button',
+          { title: 'Save all items as a spreadsheet file (.csv)', disabled: !items.length, onclick: exportCsv },
+          'Save to file',
+        ),
+        el('button', { title: 'Load items from a spreadsheet file (.csv)', onclick: () => csvPicker.click() }, 'Load from file…'),
+      ),
+    ),
+  );
 }
 
 // A labelled control that writes straight back to the item as the user types.
@@ -387,11 +435,11 @@ function renderItemEditor(item) {
 
   app.append(
     el('div', { className: 'row' }, back),
-    el('h2', {}, 'Item'),
+    el('h2', {}, 'Item details'),
     el(
       'div',
       { className: 'stack' },
-      itemField(item, 'title', 'Title', el('input', { placeholder: 'What is it?' })),
+      itemField(item, 'title', 'Title', el('input', { placeholder: 'What is it? For example: Oak dining table' })),
       el(
         'div',
         { className: 'columns' },
@@ -399,20 +447,34 @@ function renderItemEditor(item) {
         itemField(item, 'quantity', 'Quantity', el('input', { type: 'number', min: '0', step: '1' })),
         itemField(item, 'condition', 'Condition', condition),
       ),
-      itemField(item, 'description', 'Description', el('textarea', { className: 'tall' })),
+      itemField(
+        item,
+        'description',
+        'Description',
+        el('textarea', { className: 'tall', placeholder: 'Describe it: size, age, condition, anything a buyer should know' }),
+      ),
     ),
     el('h2', {}, 'Photos and videos'),
   );
-  if (!item.media.length) app.append(el('p', { className: 'muted' }, 'None yet.'));
+  app.append(
+    el(
+      'p',
+      { className: 'hint' },
+      item.media.length ? 'The first one is the main photo. Drag one to change the order.' : 'No photos or videos yet.',
+    ),
+  );
   app.append(
     media,
     picker,
+    el('div', { className: 'stack' }, el('button', { onclick: () => picker.click() }, 'Add photos or videos')),
     el(
       'div',
-      { className: 'row' },
-      el('button', { onclick: () => picker.click() }, 'Add photos or videos'),
-      el('span', { className: 'grow' }),
-      ...removeControls(`item:${item.id}`, () => removeItem(item)),
+      { className: 'row end' },
+      ...removeControls(`item:${item.id}`, () => removeItem(item), {
+        label: 'Delete this item',
+        question: `Delete "${itemName(item)}" and its photos?`,
+        yes: 'Delete',
+      }),
     ),
   );
 }

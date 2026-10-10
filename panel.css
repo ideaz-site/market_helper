@@ -1,8 +1,10 @@
 :root {
   color-scheme: light dark;
   --accent: #7c3aed;
-  --border: color-mix(in srgb, currentColor 18%, transparent);
-  --muted: color-mix(in srgb, currentColor 60%, transparent);
+  --border: color-mix(in srgb, currentColor 30%, transparent);
+  --muted: color-mix(in srgb, currentColor 72%, transparent);
+  --link: light-dark(#6d28d9, #c4b5fd);
+  --warn: light-dark(#b91c1c, #f87171);
 }
 
 * {
@@ -12,12 +14,12 @@
 body {
   margin: 0;
   padding: 12px;
-  font: 13px/1.4 system-ui, sans-serif;
+  font: 15px/1.45 system-ui, sans-serif;
 }
 
 h1 {
   margin: 0 0 10px;
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .header {
@@ -29,17 +31,27 @@ h1 {
 }
 
 h2 {
-  margin: 14px 0 6px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
+  margin: 18px 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+h2.name {
+  margin-top: 12px;
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+}
+
+p {
+  margin: 0 0 8px;
 }
 
 button {
-  padding: 5px 10px;
+  min-height: 36px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -67,44 +79,63 @@ button.danger {
   color: #fff;
 }
 
+button.big {
+  min-height: 44px;
+  font-weight: 600;
+}
+
 button.icon {
   display: inline-flex;
   flex: none;
-  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding: 0;
 }
 
 button.icon svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
 }
 
 button.back {
   margin-top: 10px;
-  align-items: center;
   gap: 2px;
-  padding-right: 10px;
+  padding: 0 12px 0 4px;
 }
 
 button.link {
-  padding: 0;
+  min-height: 0;
+  padding: 4px 2px;
   border: 0;
-  color: var(--accent);
+  color: var(--link);
+  text-decoration: underline;
 }
 
 input,
 select,
 textarea {
   width: 100%;
-  padding: 5px 7px;
+  min-height: 36px;
+  padding: 6px 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   font: inherit;
 }
 
 textarea {
-  min-height: 52px;
+  min-height: 64px;
   resize: vertical;
 }
 
@@ -115,7 +146,77 @@ textarea {
 }
 
 .row:has(> h2) {
-  margin: 10px 0 6px;
+  margin: 12px 0 8px;
+}
+
+.row.equal > * {
+  flex: 1;
+}
+
+.row.end {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.row + .row.equal {
+  margin-top: 6px;
+}
+
+.tabs button {
+  min-height: 42px;
+  font-weight: 600;
+}
+
+/* A remove question drops onto its own line under the row it belongs to. */
+.row:has(> .confirm) {
+  flex-wrap: wrap;
+}
+
+.confirm {
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.confirm .ask {
+  flex: 1 0 100%;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.warn {
+  margin: 0;
+  color: var(--warn);
+  font-size: 14px;
+}
+
+.steps {
+  margin: 6px 0 12px;
+  padding-left: 22px;
+}
+
+.steps li {
+  margin: 6px 0;
+}
+
+.more {
+  margin-top: 16px;
+}
+
+.more summary {
+  padding: 6px 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.footer {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .row > h2 {
@@ -133,11 +234,22 @@ textarea {
 .card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
-  margin-bottom: 8px;
-  padding: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
+}
+
+.card .hint {
+  margin: 0;
+}
+
+/* Names in a card wrap, so a long one is never cut off. */
+.card strong.grow,
+.card .line {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .profile {
@@ -162,18 +274,20 @@ textarea {
 
 .grip {
   flex: none;
+  padding: 0 2px;
   color: var(--muted);
+  font-size: 18px;
   cursor: grab;
-}
-
-.csv {
-  margin-bottom: 8px;
 }
 
 .stack {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+.stack.fill {
+  margin-bottom: 10px;
 }
 
 .columns {
@@ -188,23 +302,27 @@ textarea {
 }
 
 .field > span {
-  font-size: 11px;
-  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The item chooser is a setting for the whole list, so it's set apart from the boxes. */
+.field.pick {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .preview {
   max-height: 96px;
   margin: 0;
-  padding: 5px 7px;
+  padding: 6px 9px;
   overflow: auto;
   border: 1px dashed var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-label.row {
-  margin-bottom: 8px;
 }
 
 textarea.tall {
@@ -217,10 +335,17 @@ textarea.tall {
   text-overflow: ellipsis;
 }
 
+.thumb.letter {
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 600;
+}
+
 .thumb {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 6px;
   background: var(--border);
   object-fit: cover;
@@ -229,6 +354,7 @@ textarea.tall {
 .media {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -272,7 +398,7 @@ textarea.tall {
   border-radius: 4px;
   background: rgb(0 0 0 / 70%);
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -310,8 +436,8 @@ textarea.tall {
 
 .dot {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--border);
 }
@@ -324,8 +450,21 @@ textarea.tall {
   background: #dc2626;
 }
 
+/* Feedback stays pinned to the bottom of the panel so it can't scroll out of sight. */
 #status {
-  min-height: 18px;
-  margin: 8px 0 0;
-  color: var(--muted);
+  position: sticky;
+  bottom: 0;
+  margin: 12px -12px -12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 16%, Canvas);
+  font-size: 15px;
+}
+
+#status:empty {
+  display: none;
+}
+
+#status.error {
+  background: color-mix(in srgb, #dc2626 18%, Canvas);
 }

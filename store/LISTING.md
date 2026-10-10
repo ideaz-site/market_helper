@@ -18,21 +18,21 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
 
 **Description**
 
-    Market Helper fills in the forms you fill in over and over.
+    Market Helper fills in the forms you fill in over and over, in plain words and big buttons.
 
-    Add a site, click the text fields you care about, and type the text you want in each one. From then on, one click pastes everything into the page.
+    Save a website, click the boxes you want filled in, and type what goes in each one. From then on, one press of "Fill in the page" types everything in for you.
 
     HOW IT WORKS
-    1. Open the site and click the Market Helper icon. It opens in Chrome's side panel and stays open while you use the page.
-    2. Click "Add this site".
-    3. Click "Pick a field". Every text field on the page is highlighted. Click one to save it.
-    4. Type the text for each field, then click Paste, or Paste all.
+    1. Go to the website where you post listings and click the Market Helper icon. It opens in Chrome's side panel and stays open while you use the page.
+    2. Press "Save this website".
+    3. Press "Choose a box on the page". Every text box on the page is highlighted. Click one to save it.
+    4. Type what should go in each box, then press "Fill in the page".
 
-    PROFILES
-    Each site can have several profiles, each with its own fields and text. Keep one per item you list, per message you send, or per form you fill in. Switch between them or paste any of them from the All sites list, and drag them into the order you like.
+    TEMPLATES
+    Each website can have several templates, each with its own boxes and text. Keep one per kind of listing, per message you send, or per form you fill in. Switch between them or fill in from any of them in the "All my websites" list, and drag them into the order you like.
 
-    CATALOG
-    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place. Link a saved field to an item's title, price, quantity, condition or description, then pick an item and paste its details into the form.
+    MY ITEMS
+    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place. Tell a box to use the item's title, price, quantity, condition or description, then choose an item and fill its details into the form.
 
     GOOD FOR
     - Reposting marketplace and classified listings
@@ -40,7 +40,7 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
     - Canned replies and descriptions
 
     PRIVATE BY DESIGN
-    Everything is stored on your device. Market Helper has no server, no account and no analytics, and it only acts on a page when you click Pick a field or Paste.
+    Everything is stored on your device. Market Helper has no server, no account and no analytics, and it only acts on a page when you press "Choose a box on the page" or "Fill in".
 
 **Category:** Workflow & Planning (under Productivity)
 
@@ -76,19 +76,19 @@ The screenshots show the real panel with sample data beside a made-up listing pa
 
 `scripting`
 
-    Injects a script into the current page only when the user clicks "Pick a field" (to highlight text fields and record the one they click) or "Paste" (to put their saved text into the saved field). It also checks whether saved fields exist on a site the user has saved.
+    Injects a script into the current page only when the user presses "Choose a box on the page" (to highlight text fields and record the one they click) or "Fill in" (to put their saved text into the saved field). It also checks whether saved fields exist on a site the user has saved.
 
 `sidePanel`
 
-    The extension's interface is a side panel. Picking a field requires clicking on the page, which would close a popup, so the interface has to stay open beside the page.
+    The extension's interface is a side panel. Choosing a box requires clicking on the page, which would close a popup, so the interface has to stay open beside the page.
 
 `clipboardRead`
 
-    When the user clicks Paste on a field they have left empty, the extension pastes the current clipboard text into that field instead. The clipboard is read only at that moment, and its contents are not stored or transmitted.
+    When the user presses Fill in on a box they have left empty, the extension pastes the current clipboard text into that field instead. The clipboard is read only at that moment, and its contents are not stored or transmitted.
 
 Host permission (`<all_urls>`)
 
-    Users choose which sites to use the extension on, and those can be any site, so the sites cannot be listed in advance. The side panel stays open as the user switches tabs and must read the tab's address to show the matching saved site and fill its fields. The extension only changes a page when the user clicks Pick a field or Paste.
+    Users choose which sites to use the extension on, and those can be any site, so the sites cannot be listed in advance. The side panel stays open as the user switches tabs and must read the tab's address to show the matching saved site and fill its fields. The extension only changes a page when the user presses Choose a box on the page or Fill in.
 
 **Remote code:** No, I am not using remote code. All code is in the package.
 
