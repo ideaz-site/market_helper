@@ -12,8 +12,9 @@ Everything you set up is saved on your own device with Chrome's local extension 
 - the profiles you create for each site
 - the text fields you pick (a label and a CSS selector that locates the field)
 - the text you type for each field
+- the items in your catalog: title, price, quantity, condition, description, and the photos and videos you add
 
-This data never leaves your browser. Removing a field, profile or site deletes it, and uninstalling the extension deletes all of it.
+This data never leaves your browser. Removing a field, profile, site, item, photo or video deletes it, and uninstalling the extension deletes all of it.
 
 ## What it accesses
 

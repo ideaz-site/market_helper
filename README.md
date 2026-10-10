@@ -20,7 +20,13 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 
 **All sites** lists every saved site with its profiles underneath; the arrow collapses or expands the list. Each profile has a paste icon, which fills its fields in the current tab or any open tab on that site. Drag a profile to reorder it, or click its name to edit it.
 
-Sites are keyed by hostname and everything is stored locally in `chrome.storage.local`.
+## Catalog
+
+The **Catalog** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
+
+## Storage
+
+Sites are keyed by hostname. Sites, profiles and item details are stored locally in `chrome.storage.local`; photos and videos are stored locally in IndexedDB.
 The dot beside a field is green when the field is on the current page and red when it isn't.
 
 ## Limits

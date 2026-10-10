@@ -9,6 +9,7 @@ const statusEl = document.getElementById('status');
 // host -> { host, addedAt, collapsed, activeProfile, order: [profile id],
 //           profiles: { id -> { id, name, fields } } }
 let sites = {};
+let view = 'sites'; // 'sites' | 'catalog' (catalog.js)
 let dragging = null; // { host, id } of the profile row being dragged
 let tab = null;
 let tabHost = null; // null when the active tab isn't a normal web page
@@ -557,9 +558,28 @@ async function edit(host) {
   render();
 }
 
+function renderTabs() {
+  const tabButton = (name, label) =>
+    el(
+      'button',
+      {
+        className: view === name ? 'grow primary' : 'grow',
+        onclick: () => {
+          view = name;
+          pendingRemove = null;
+          render();
+        },
+      },
+      label,
+    );
+  app.append(el('div', { className: 'row' }, tabButton('sites', 'Sites'), tabButton('catalog', 'Catalog')));
+}
+
 function render() {
   app.replaceChildren(el('h1', {}, 'Market Helper'));
   setStatus('');
+  renderTabs();
+  if (view === 'catalog') return renderCatalog();
   const site = sites[editingHost];
   if (site) renderEditor(site);
   else renderList();
@@ -604,6 +624,7 @@ async function onFieldPicked() {
 async function init() {
   await readTab();
   await loadSites();
+  await loadItems();
   await refreshFound();
   editingHost = sites[tabHost] ? tabHost : null;
   render();

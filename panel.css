@@ -99,6 +99,15 @@ textarea {
   gap: 6px;
 }
 
+.row:has(> h2) {
+  align-items: flex-end;
+  margin-bottom: 6px;
+}
+
+.row > h2 {
+  margin-bottom: 0;
+}
+
 .row > .grow {
   flex: 1;
   min-width: 0;
@@ -141,6 +150,66 @@ textarea {
   flex: none;
   color: var(--muted);
   cursor: grab;
+}
+
+.stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.field {
+  display: grid;
+  gap: 3px;
+}
+
+.field > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+textarea.tall {
+  min-height: 110px;
+}
+
+.line {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--border);
+  object-fit: cover;
+}
+
+.media {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.media .tile {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.media .thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
 }
 
 .muted {

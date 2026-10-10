@@ -31,6 +31,9 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
     PROFILES
     Each site can have several profiles, each with its own fields and text. Keep one per item you list, per message you send, or per form you fill in. Switch between them or paste any of them from the All sites list, and drag them into the order you like.
 
+    CATALOG
+    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place.
+
     GOOD FOR
     - Reposting marketplace and classified listings
     - Repetitive web forms
@@ -65,7 +68,11 @@ The screenshots show the real panel with sample data beside a made-up listing pa
 
 `storage`
 
-    Saves the user's sites, profiles, picked fields and text on their own device with chrome.storage.local. Nothing is synced or sent anywhere.
+    Saves the user's sites, profiles, picked fields, text and catalog items on their own device with chrome.storage.local. Nothing is synced or sent anywhere.
+
+`unlimitedStorage`
+
+    The item catalog stores photos and videos the user adds, on their own device. These files can exceed the default storage quota, and this permission keeps Chrome from evicting them.
 
 `scripting`
 
