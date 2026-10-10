@@ -6,8 +6,10 @@ const OLD_ACTIVE_KEY = 'activeProfile';
 const app = document.getElementById('app');
 const statusEl = document.getElementById('status');
 
-// host -> { host, addedAt, activeProfile, profiles: { id -> { id, name, fields } } }
+// host -> { host, addedAt, collapsed, activeProfile, order: [profile id],
+//           profiles: { id -> { id, name, fields } } }
 let sites = {};
+let dragging = null; // { host, id } of the profile row being dragged
 let tab = null;
 let tabHost = null; // null when the active tab isn't a normal web page
 let editingHost = null;
@@ -54,10 +56,21 @@ async function loadSites() {
     migrated = true;
   }
 
+  // Storage doesn't keep object key order, so profile order lives in its own list.
+  for (const site of Object.values(sites)) {
+    const known = (site.order || []).filter((id) => site.profiles[id]);
+    const missing = Object.keys(site.profiles).filter((id) => !known.includes(id));
+    site.order = [...known, ...missing];
+  }
+
   if (migrated) {
     await save();
     await chrome.storage.local.remove([OLD_PROFILES_KEY, OLD_ACTIVE_KEY]);
   }
+}
+
+function profilesOf(site) {
+  return site.order.map((id) => site.profiles[id]);
 }
 
 function setStatus(message) {
@@ -142,9 +155,8 @@ async function pasteOne(field) {
   }
 }
 
-// Pastes every field of the site's selected profile.
-async function pasteSite(site) {
-  const profile = activeProfile(site);
+// Pastes every field of one of the site's profiles.
+async function pasteProfile(site, profile) {
   if (!profile.fields.length) return setStatus(`"${profile.name}" has no fields on ${site.host}`);
   try {
     const tabId = await tabFor(site.host);
@@ -174,6 +186,7 @@ async function addCurrentSite() {
     host: tabHost,
     addedAt: Date.now(),
     activeProfile: id,
+    order: [id],
     profiles: { [id]: { id, name: 'Default', fields: [] } },
   };
   await save();
@@ -207,7 +220,28 @@ async function selectProfile(site, id) {
 function createProfile(site, name) {
   const id = crypto.randomUUID();
   site.profiles[id] = { id, name, fields: [] };
+  site.order.push(id);
   return selectProfile(site, id);
+}
+
+// Opens a profile for editing from the All sites list.
+async function openProfile(site, id) {
+  await selectProfile(site, id);
+  edit(site.host);
+}
+
+async function moveProfile(site, id, targetId, after) {
+  const order = site.order.filter((other) => other !== id);
+  order.splice(order.indexOf(targetId) + (after ? 1 : 0), 0, id);
+  site.order = order;
+  await save();
+  render();
+}
+
+async function toggleCollapsed(site) {
+  site.collapsed = !site.collapsed;
+  await save();
+  render();
 }
 
 async function renameProfile(site, name) {
@@ -220,7 +254,8 @@ async function renameProfile(site, name) {
 
 function deleteProfile(site) {
   delete site.profiles[site.activeProfile];
-  return selectProfile(site, Object.keys(site.profiles)[0]);
+  site.order = site.order.filter((id) => id !== site.activeProfile);
+  return selectProfile(site, site.order[0]);
 }
 
 function setProfileMode(mode) {
@@ -238,13 +273,15 @@ function adoptStickyProfile(site) {
 
 function profileSelect(site) {
   const select = el('select', { className: 'grow' });
-  for (const profile of Object.values(site.profiles)) select.append(el('option', { value: profile.id }, profile.name));
+  for (const profile of profilesOf(site)) select.append(el('option', { value: profile.id }, profile.name));
   select.value = site.activeProfile;
   select.addEventListener('change', () => selectProfile(site, select.value));
   return select;
 }
 
 const ICONS = {
+  expand: '<path d="M9 6l6 6-6 6"/>',
+  collapse: '<path d="M6 9l6 6 6-6"/>',
   paste: '<path d="M9 5H6v15h12V5h-3"/><path d="M9 3.5h6v3H9z"/>',
   remove: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
   confirm: '<path d="M5 12l5 5 9-10"/>',
@@ -374,26 +411,74 @@ function renderList() {
   const saved = Object.values(sites).sort((a, b) => a.host.localeCompare(b.host));
   if (!saved.length) app.append(el('p', { className: 'muted' }, 'No sites yet.'));
   for (const site of saved) {
-    app.append(
+    const toggle = site.collapsed
+      ? iconButton('expand', 'Show profiles', { onclick: () => toggleCollapsed(site) })
+      : iconButton('collapse', 'Hide profiles', { onclick: () => toggleCollapsed(site) });
+    const card = el(
+      'div',
+      { className: 'card' },
       el(
         'div',
-        { className: 'card' },
-        el(
-          'div',
-          { className: 'row' },
-          el('strong', { className: 'grow', title: site.host }, site.host),
-          el('button', { onclick: () => edit(site.host) }, 'Edit'),
-          ...removeControls(`site:${site.host}`, () => removeSite(site.host)),
-        ),
-        el(
-          'div',
-          { className: 'row' },
-          profileSelect(site),
-          el('button', { className: 'primary', onclick: () => pasteSite(site) }, 'Paste'),
-        ),
+        { className: 'row' },
+        toggle,
+        el('strong', { className: 'grow', title: site.host }, site.host),
+        el('button', { onclick: () => edit(site.host) }, 'Edit'),
+        ...removeControls(`site:${site.host}`, () => removeSite(site.host)),
       ),
     );
+    if (!site.collapsed) card.append(...profilesOf(site).map((profile) => renderProfileRow(site, profile)));
+    app.append(card);
   }
+}
+
+// One profile in the All sites list: drag to reorder, click the name to edit.
+function renderProfileRow(site, profile) {
+  const count = `${profile.fields.length} field${profile.fields.length === 1 ? '' : 's'}`;
+  const row = el(
+    'div',
+    { className: 'row profile', draggable: true },
+    el('span', { className: 'grip', title: 'Drag to reorder' }, '⠿'),
+    el(
+      'button',
+      { className: 'link grow', title: `Edit ${profile.name}`, onclick: () => openProfile(site, profile.id) },
+      profile.name,
+    ),
+    el('span', { className: 'muted' }, count),
+    iconButton('paste', `Paste ${profile.name}`, { className: 'primary', onclick: () => pasteProfile(site, profile) }),
+  );
+
+  const isTarget = () => dragging && dragging.host === site.host && dragging.id !== profile.id;
+  const dropsAfter = (event) => {
+    const box = row.getBoundingClientRect();
+    return event.clientY > box.top + box.height / 2;
+  };
+  const clearMarks = () => row.classList.remove('drop-before', 'drop-after');
+
+  row.addEventListener('dragstart', (event) => {
+    dragging = { host: site.host, id: profile.id };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', profile.name);
+    row.classList.add('dragging');
+  });
+  row.addEventListener('dragend', () => {
+    dragging = null;
+    row.classList.remove('dragging');
+  });
+  row.addEventListener('dragover', (event) => {
+    if (!isTarget()) return;
+    event.preventDefault();
+    const after = dropsAfter(event);
+    row.classList.toggle('drop-before', !after);
+    row.classList.toggle('drop-after', after);
+  });
+  row.addEventListener('dragleave', clearMarks);
+  row.addEventListener('drop', (event) => {
+    if (!isTarget()) return;
+    event.preventDefault();
+    clearMarks();
+    moveProfile(site, dragging.id, profile.id, dropsAfter(event));
+  });
+  return row;
 }
 
 function renderField(profile, field, onPage) {
@@ -453,7 +538,7 @@ function renderEditor(site) {
       el('span', { className: 'grow' }),
       el(
         'button',
-        { className: 'primary', disabled: !onPage || !profile.fields.length, onclick: () => pasteSite(site) },
+        { className: 'primary', disabled: !onPage || !profile.fields.length, onclick: () => pasteProfile(site, profile) },
         'Paste all',
       ),
     ),

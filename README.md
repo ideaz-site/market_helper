@@ -18,7 +18,7 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 
 **Profiles** belong to a site: each one is a separate set of fields and text for that site. Pick one from the site's dropdown, or use **New**, **Rename** and **Delete**. A new profile starts empty. When you move to another site, it opens on the profile with the same name if it has one, otherwise on its own.
 
-**All sites** lists every saved site with its profile dropdown and a **Paste** button, which fills that site's fields in the current tab or any open tab on that site.
+**All sites** lists every saved site with its profiles underneath; the arrow collapses or expands the list. Each profile has a paste icon, which fills its fields in the current tab or any open tab on that site. Drag a profile to reorder it, or click its name to edit it.
 
 Sites are keyed by hostname and everything is stored locally in `chrome.storage.local`.
 The dot beside a field is green when the field is on the current page and red when it isn't.

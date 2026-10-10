@@ -116,6 +116,32 @@ textarea {
   border-radius: 8px;
 }
 
+.profile {
+  padding: 2px 0;
+}
+
+.profile.dragging {
+  opacity: 0.4;
+}
+
+.profile.drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+
+.profile.drop-after {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+.profile button.link {
+  text-align: left;
+}
+
+.grip {
+  flex: none;
+  color: var(--muted);
+  cursor: grab;
+}
+
 .muted {
   color: var(--muted);
 }
