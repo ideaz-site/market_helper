@@ -79,7 +79,7 @@ button.icon svg {
 }
 
 button.back {
-  margin-top: 8px;
+  margin-top: 10px;
   align-items: center;
   gap: 2px;
   padding-right: 10px;
@@ -115,12 +115,11 @@ textarea {
 }
 
 .row:has(> h2) {
-  align-items: flex-end;
-  margin-bottom: 6px;
+  margin: 10px 0 6px;
 }
 
 .row > h2 {
-  margin-bottom: 0;
+  margin: 0;
 }
 
 .row > .grow {
