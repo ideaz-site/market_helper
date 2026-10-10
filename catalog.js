@@ -8,6 +8,7 @@ const CONDITIONS = ['New', 'Like new', 'Good', 'Fair', 'For parts'];
 let items = [];
 let editingItemId = null;
 let mediaDb = null;
+let draggingMedia = null; // { itemId, id } of the photo or video tile being dragged
 const mediaUrls = new Map(); // media id -> object URL for its file
 
 function saveItems() {
@@ -200,6 +201,15 @@ async function removeMedia(item, media) {
   render();
 }
 
+async function moveMedia(item, id, targetId, after) {
+  const moved = item.media.find((entry) => entry.id === id);
+  const media = item.media.filter((entry) => entry !== moved);
+  media.splice(media.findIndex((entry) => entry.id === targetId) + (after ? 1 : 0), 0, moved);
+  item.media = media;
+  await saveItems();
+  render();
+}
+
 function editItem(id) {
   editingItemId = id;
   pendingRemove = null;
@@ -208,7 +218,7 @@ function editItem(id) {
 
 function mediaThumb(media) {
   if (!media) return el('div', { className: 'thumb' });
-  const node = el(media.kind === 'video' ? 'video' : 'img', { className: 'thumb', title: media.name });
+  const node = el(media.kind === 'video' ? 'video' : 'img', { className: 'thumb', title: media.name, draggable: false });
   if (media.kind === 'video') {
     node.muted = true;
     node.preload = 'metadata';
@@ -218,6 +228,57 @@ function mediaThumb(media) {
     () => node.classList.add('missing'),
   );
   return node;
+}
+
+// One photo or video in the item editor: labelled by kind, drag to reorder.
+function renderMediaTile(item, entry) {
+  const video = entry.kind === 'video';
+  const frame = el(
+    'div',
+    { className: 'frame' },
+    mediaThumb(entry),
+    el('span', { className: `badge ${entry.kind}` }, video ? 'Video' : 'Photo'),
+  );
+  if (video) frame.append(el('span', { className: 'play' }));
+  const tile = el(
+    'div',
+    { className: 'tile', draggable: true, title: `${entry.name} (drag to reorder)` },
+    frame,
+    el('div', { className: 'row' }, ...removeControls(`media:${entry.id}`, () => removeMedia(item, entry), true)),
+  );
+
+  const isTarget = () => draggingMedia && draggingMedia.itemId === item.id && draggingMedia.id !== entry.id;
+  const dropsAfter = (event) => {
+    const box = tile.getBoundingClientRect();
+    return event.clientX > box.left + box.width / 2;
+  };
+  const clearMarks = () => tile.classList.remove('drop-before', 'drop-after');
+
+  tile.addEventListener('dragstart', (event) => {
+    draggingMedia = { itemId: item.id, id: entry.id };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', entry.name);
+    tile.classList.add('dragging');
+  });
+  tile.addEventListener('dragend', () => {
+    draggingMedia = null;
+    tile.classList.remove('dragging');
+  });
+  tile.addEventListener('dragover', (event) => {
+    if (!isTarget()) return;
+    event.preventDefault();
+    const after = dropsAfter(event);
+    tile.classList.toggle('drop-before', !after);
+    tile.classList.toggle('drop-after', after);
+  });
+  tile.addEventListener('dragleave', clearMarks);
+  tile.addEventListener('drop', (event) => {
+    if (!isTarget()) return;
+    event.preventDefault();
+    clearMarks();
+    moveMedia(item, draggingMedia.id, entry.id, dropsAfter(event));
+  });
+  return tile;
 }
 
 function itemSummary(item) {
@@ -296,16 +357,7 @@ function renderItemEditor(item) {
   picker.addEventListener('change', () => addMedia(item, [...picker.files]));
 
   const media = el('div', { className: 'media' });
-  for (const entry of item.media) {
-    media.append(
-      el(
-        'div',
-        { className: 'tile' },
-        mediaThumb(entry),
-        el('div', { className: 'row' }, ...removeControls(`media:${entry.id}`, () => removeMedia(item, entry), true)),
-      ),
-    );
-  }
+  for (const entry of item.media) media.append(renderMediaTile(item, entry));
 
   app.append(
     el(

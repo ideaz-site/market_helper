@@ -31,6 +31,8 @@ The **Update** button at the top of the panel depends on how the extension was i
 
 The **Catalog** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
 
+Each photo and video is labelled **Photo** or **Video**, and videos also show a play symbol. Drag one to reorder; the first is the item's thumbnail in the list.
+
 ### CSV and Google Sheets
 
 **Export CSV** downloads every item as `market-helper-items.csv`. **Import CSV** reads one back.
