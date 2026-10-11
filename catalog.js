@@ -140,7 +140,15 @@ function itemSelect() {
     await chrome.storage.local.set({ [ACTIVE_ITEM_KEY]: activeItemId });
     render();
   });
-  return el('label', { className: 'field pick' }, el('span', {}, 'Item to use'), select);
+  // A dropdown can't show pictures, so the chosen item's picture sits beside it.
+  const item = activeItem();
+  const picture = item.media[0] ? mediaThumb(item.media[0], letterTile(item)) : letterTile(item);
+  return el(
+    'label',
+    { className: 'field pick' },
+    el('span', {}, 'Item to use'),
+    el('span', { className: 'row' }, picture, select),
+  );
 }
 
 function settled(request) {
