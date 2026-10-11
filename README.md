@@ -64,5 +64,5 @@ The dot beside a box is green when the box is on the current page and red when i
 ## Limits
 
 - Boxes inside iframes can't be chosen.
-- A box with no stable attribute (name, aria-label, placeholder, test id, id) is matched by its position in the page, which breaks if the page layout changes.
+- A box with no stable attribute (name, aria-label, placeholder, test id, id) is saved by its position in the page. Positions change when a site redraws, so such a box is found again by its label; if two boxes on the page share that label, it can't be told apart and shows as not on the page.
 - Because the panel follows you across tabs, the extension asks for access to all sites.

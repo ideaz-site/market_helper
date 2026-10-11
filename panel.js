@@ -98,12 +98,53 @@ function boxes(count) {
   return `${count} ${count === 1 ? 'box' : 'boxes'}`;
 }
 
-// Runs in the page. Sets the value the way a user edit would, so frameworks
-// that track input state (React etc.) notice the change.
-function fillField(selector, text) {
-  const target = document.querySelector(selector);
+// Runs in the page, so it can't use anything outside itself. action 'find'
+// says which of the boxes are on the page; 'fill' puts text into the first one.
+function inPage(action, fields, text) {
+  // Same list and labelling as picker.js.
+  const TEXT_FIELDS =
+    'textarea,input:not([type]),input[type="text"],input[type="search"],input[type="email"],input[type="url"],' +
+    'input[type="tel"],input[type="number"],[contenteditable=""],[contenteditable="true"],' +
+    '[contenteditable="plaintext-only"],[role="textbox"]';
+  const describe = (el) =>
+    (
+      el.getAttribute('aria-label') ||
+      el.getAttribute('placeholder') ||
+      (el.labels && el.labels[0] && el.labels[0].textContent) ||
+      el.getAttribute('name') ||
+      el.tagName.toLowerCase()
+    )
+      .trim()
+      .replace(/\s+/g, ' ')
+      .slice(0, 60);
+  const bySelector = (field) => {
+    try {
+      return document.querySelector(field.selector);
+    } catch {
+      return null;
+    }
+  };
+  // The one visible text box carrying the label the box was saved under.
+  const byLabel = (field) => {
+    const matches = [...document.querySelectorAll(TEXT_FIELDS)].filter((el) => {
+      if (el.querySelector(TEXT_FIELDS) || describe(el) !== field.label) return false;
+      const box = el.getBoundingClientRect();
+      return box.width > 0 && box.height > 0;
+    });
+    return matches.length === 1 ? matches[0] : null;
+  };
+  // A selector that is only a position in the page ("html > body > div:nth-of-type(3)…")
+  // points somewhere else once the site redraws, so the label is trusted first.
+  const locate = (field) =>
+    field.selector.startsWith('html > ') ? byLabel(field) || bySelector(field) : bySelector(field) || byLabel(field);
+
+  if (action === 'find') return fields.map((field) => locate(field) !== null);
+
+  const target = locate(fields[0]);
   if (!target) return false;
   target.focus();
+  // Set the value the way a user edit would, so frameworks that track input
+  // state (React etc.) notice the change.
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
     const proto = target instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(target, text);
@@ -119,15 +160,9 @@ function fillField(selector, text) {
   return true;
 }
 
-// Runs in the page.
-function findFields(selectors) {
-  return selectors.map((selector) => {
-    try {
-      return document.querySelector(selector) !== null;
-    } catch {
-      return false;
-    }
-  });
+// What inPage needs to know about a saved box.
+function locator({ selector, label }) {
+  return { selector, label };
 }
 
 async function runInPage(tabId, func, args) {
@@ -136,17 +171,30 @@ async function runInPage(tabId, func, args) {
 }
 
 async function refreshFound() {
-  found = {};
+  const next = {};
   const site = sites[tabHost];
-  if (!site) return;
-  const { fields } = activeProfile(site);
-  if (!fields.length) return;
-  try {
-    const results = await runInPage(tab.id, findFields, [fields.map((f) => f.selector)]);
-    fields.forEach((field, i) => (found[field.id] = results[i]));
-  } catch {
-    // Pages like the Chrome Web Store refuse injection; leave the dots neutral.
+  const fields = site ? activeProfile(site).fields : [];
+  if (fields.length) {
+    try {
+      const results = await runInPage(tab.id, inPage, ['find', fields.map(locator)]);
+      fields.forEach((field, i) => (next[field.id] = results[i]));
+    } catch {
+      // Pages like the Chrome Web Store refuse injection; leave the dots neutral.
+    }
   }
+  const changed = JSON.stringify(next) !== JSON.stringify(found);
+  found = next;
+  return changed;
+}
+
+// Sites draw their forms after the page loads, and open them in dialogs without
+// loading anything, so the page is looked at again while its boxes are on show.
+async function watchPage() {
+  if (document.hidden || view !== 'sites' || !tabHost || editingHost !== tabHost) return;
+  if (!(await refreshFound())) return;
+  // Don't redraw under someone who is typing or choosing.
+  if (document.activeElement.matches('input, textarea, select')) return;
+  render();
 }
 
 // The current tab when it's on this site, otherwise any open tab that is.
@@ -172,7 +220,7 @@ async function pasteField(tabId, field) {
     result = 'clipboard';
   }
   if (!text) return 'empty';
-  return (await runInPage(tabId, fillField, [field.selector, text])) ? result : 'missing';
+  return (await runInPage(tabId, inPage, ['fill', [locator(field)], text])) ? result : 'missing';
 }
 
 async function pasteOne(field) {
@@ -875,6 +923,7 @@ async function init() {
   editingHost = sites[tabHost] ? tabHost : null;
   render();
   showUpdateNote();
+  setInterval(watchPage, 2000);
 
   chrome.tabs.onActivated.addListener(onTabChange);
   chrome.tabs.onUpdated.addListener((tabId, change) => {
