@@ -29,7 +29,7 @@ Once you have items under **My items**, each box gets a **Fill this box with** c
 **Check for updates** at the bottom of the panel depends on how the extension was installed:
 
 - **From the Chrome Web Store:** it checks the store for a newer version and restarts into it.
-- **Load unpacked from a git clone:** it runs `git pull` in the extension's folder, then reloads the extension. Reopen the panel afterwards; it shows what the pull did. If the pull fails, nothing is reloaded and the panel shows git's message.
+- **Load unpacked from a git clone:** it runs `git pull` in the extension's folder, then reloads the extension. Reopen the panel afterwards; it says whether anything was updated. If the pull fails, nothing is reloaded and the panel shows git's message.
 
 The extension can't run `git` itself, so the pull is done by a small helper that you install once on each computer:
 

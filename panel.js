@@ -766,7 +766,8 @@ async function pullAndReload() {
   }
   if (!reply.ok) return setStatus(`Couldn't get the latest files, so nothing changed: ${reply.output}`, 'error');
   // Reloading closes the panel, so the result is shown when it next opens.
-  await chrome.storage.local.set({ [UPDATE_NOTE_KEY]: `Updated. git pull: ${reply.output}` });
+  const note = /already up to date/i.test(reply.output) ? 'You already have the latest version.' : 'Updated successfully.';
+  await chrome.storage.local.set({ [UPDATE_NOTE_KEY]: note });
   chrome.runtime.reload();
 }
 
