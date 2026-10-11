@@ -25,7 +25,7 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
     HOW IT WORKS
     1. Go to the website where you post listings and click the Market Helper icon. It opens in Chrome's side panel and stays open while you use the page.
     2. Press "Save this website".
-    3. Press "Choose a box on the page". Every text box on the page is highlighted. Click one to save it.
+    3. Press "Choose a box on the page". Every text box on the page is highlighted. Click each one you want, then press Done.
     4. Type what should go in each box, then press "Fill in the page".
 
     TEMPLATES

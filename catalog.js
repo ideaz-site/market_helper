@@ -17,10 +17,20 @@ let editingItemId = null;
 let activeItemId = null; // the item that catalog-linked fields paste from
 let mediaDb = null;
 let draggingMedia = null; // { itemId, id } of the photo or video tile being dragged
+let selectedMediaId = null; // the photo or video whose actions are showing
+let detailsOpen = false; // whether the list of the user's own details is being changed
+let itemReturn = null; // website to offer a way back to, when the user came from its boxes
+let listScroll = 0; // where the list was scrolled to when an item was opened
+let importUndo = null; // the items as they were before the last spreadsheet load, as JSON
 const mediaUrls = new Map(); // media id -> object URL for its file
 
 function saveItems() {
   return chrome.storage.local.set({ [ITEMS_KEY]: items });
+}
+
+// For saves made as the user types, where nothing else would notice a failure.
+function saveTyping() {
+  saveItems().catch(() => setStatus("Couldn't save your changes. Check your disk space and try again.", 'error'));
 }
 
 async function loadItems() {
@@ -92,21 +102,45 @@ function itemName(item) {
   return item.title || 'Item with no name';
 }
 
+// Whether any template takes something from the chosen item.
+function websitesUseItems() {
+  return Object.values(sites).some((site) => profilesOf(site).some(usesCatalog));
+}
+
+function templatesUsing(source) {
+  let count = 0;
+  for (const site of Object.values(sites)) {
+    for (const profile of profilesOf(site)) {
+      if (profile.fields.some((field) => field.source === source)) count++;
+    }
+  }
+  return count;
+}
+
+async function useItem(item) {
+  activeItemId = item.id;
+  fillIssues = {};
+  await chrome.storage.local.set({ [ACTIVE_ITEM_KEY]: activeItemId });
+  render();
+  setStatus(`Websites now use "${itemName(item)}".`, 'ok');
+}
+
 function activeItem() {
   return items.find((item) => item.id === activeItemId) || items[0] || null;
 }
 
 // Chooses the item that catalog-linked fields paste from.
 function itemSelect() {
-  const select = el('select');
+  const select = el('select', { key: 'item-to-use' });
   for (const item of items) select.append(el('option', { value: item.id }, itemName(item)));
   select.value = activeItem().id;
   select.addEventListener('change', async () => {
     activeItemId = select.value;
+    fillIssues = {};
     await chrome.storage.local.set({ [ACTIVE_ITEM_KEY]: activeItemId });
     render();
   });
-  return el('label', { className: 'field pick' }, el('span', {}, 'Fill in using this item'), select);
+  return el('label', { className: 'field pick' }, el('span', {}, 'Item to use'), select);
 }
 
 function settled(request) {
@@ -232,7 +266,23 @@ async function addItem() {
   const item = blankItem();
   items.push(item);
   await saveItems();
+  focusNext = 'item:title';
   editItem(item.id);
+}
+
+function isBlank(item) {
+  const typed = [item.title, item.price, item.description, ...Object.values(item.custom || {})];
+  return !item.media.length && !typed.some((value) => String(value || '').trim());
+}
+
+// Leaving an item that was added and never filled in throws it away, so
+// pressing Add and changing your mind doesn't leave an empty row behind.
+function leaveItem() {
+  const item = items.find((other) => other.id === editingItemId);
+  if (!item || !isBlank(item)) return;
+  items = items.filter((other) => other !== item);
+  editingItemId = null;
+  saveItems();
 }
 
 // CSV round trip, so items can be edited in a spreadsheet. The id column ties
@@ -299,6 +349,8 @@ function exportCsv() {
 // Rows whose id matches an item update it; other rows become new items. Items
 // missing from the file are left alone, and only columns in the file are touched.
 async function importCsv(file) {
+  setStatus('Loading the file…', 'busy');
+  const before = JSON.stringify(items);
   const rows = parseCsv((await file.text()).replace(/^﻿/, ''));
   const header = (rows.shift() || []).map((name) => name.trim().toLowerCase());
   const columns = CSV_COLUMNS.filter((key) => header.includes(key));
@@ -336,12 +388,25 @@ async function importCsv(file) {
     Object.assign(item, values);
     item.custom = { ...item.custom, ...custom };
   }
+  importUndo = before;
   await saveItems();
   render();
-  setStatus(`Loaded the file: ${added} new, ${updated} updated`, 'ok');
+  setStatus(`Loaded the file: ${added} new, ${updated} updated.`, 'ok');
+}
+
+// Puts the items back as they were before the last spreadsheet load. Rows a
+// load adds carry no photos or videos, so there are no files to clean up.
+async function undoImport() {
+  items = JSON.parse(importUndo);
+  importUndo = null;
+  await saveItems();
+  render();
+  setStatus('Put your items back as they were before that load.', 'ok');
 }
 
 async function removeItem(item) {
+  const name = itemName(item);
+  const wasChosen = item === activeItem();
   try {
     for (const media of item.media) await deleteMedia(media.id);
   } catch {
@@ -350,26 +415,42 @@ async function removeItem(item) {
   items = items.filter((other) => other !== item);
   await saveItems();
   editItem(null);
+  // Websites fall back to the first item left; say so, since it changes what gets filled in.
+  const next = activeItem();
+  setStatus(
+    `Deleted "${name}".` + (wasChosen && next && websitesUseItems() ? ` Websites now use "${itemName(next)}".` : ''),
+    'ok',
+  );
 }
 
-async function addMedia(item, files) {
-  let failure = null;
-  try {
-    for (const file of files) {
+const LARGE_FILE = 200 * 1024 * 1024;
+
+// Adds what it can and says which files it couldn't. button shows the progress.
+async function addMedia(item, files, button) {
+  const failed = [];
+  const large = [];
+  button.disabled = true;
+  for (const [index, file] of files.entries()) {
+    button.textContent = `Adding ${index + 1} of ${files.length}…`;
+    try {
       const id = crypto.randomUUID();
       await settled((await mediaStore('readwrite')).put(file, id));
       item.media.push({ id, kind: file.type.startsWith('video/') ? 'video' : 'image', name: file.name });
+      if (file.size > LARGE_FILE) large.push(file.name);
+    } catch {
+      failed.push(file.name);
     }
-  } catch (error) {
-    failure = error;
   }
   await saveItems();
   render();
-  if (failure) setStatus(`Couldn't add that photo or video: ${failure.message}`, 'error');
+  const named = (names) => names.map((name) => `"${name}"`).join(', ');
+  if (failed.length) setStatus(`Couldn't add ${named(failed)}.`, 'error');
+  else if (large.length) setStatus(`${named(large)} ${large.length === 1 ? 'is' : 'are'} very large and may not upload to websites.`);
 }
 
 async function removeMedia(item, media) {
   item.media = item.media.filter((other) => other !== media);
+  selectedMediaId = null;
   await saveItems();
   try {
     await deleteMedia(media.id);
@@ -389,59 +470,69 @@ async function moveMedia(item, id, targetId, after) {
   render();
 }
 
-function editItem(id) {
+// Opens an item, or the list with null. focus names a detail to land on.
+function editItem(id, focus = null) {
   setStatus('');
+  if (id !== editingItemId) leaveItem();
+  if (id) {
+    if (!editingItemId) listScroll = scrollY;
+    nextScroll = 0;
+    importUndo = null;
+    if (focus) focusNext = `item:${focus}`;
+  } else {
+    nextScroll = listScroll;
+    itemReturn = null;
+  }
   editingItemId = id;
+  selectedMediaId = null;
+  detailsOpen = false;
   pendingRemove = null;
   render();
 }
 
-function mediaThumb(media) {
-  const node = el(media.kind === 'video' ? 'video' : 'img', { className: 'thumb', title: media.name, draggable: false });
+function letterTile(item) {
+  // Spread, so an emoji or accented first letter isn't cut in half.
+  return el('div', { className: 'thumb letter' }, ([...item.title.trim()][0] || '?').toUpperCase());
+}
+
+// fallback takes the picture's place when its file can't be read.
+function mediaThumb(media, fallback = null) {
+  const node = el(media.kind === 'video' ? 'video' : 'img', { className: 'thumb', draggable: false });
   if (media.kind === 'video') {
     node.muted = true;
     node.preload = 'metadata';
+  } else {
+    node.alt = '';
   }
   mediaUrl(media.id).then(
     (url) => (node.src = url),
-    () => node.classList.add('missing'),
+    () => fallback && node.replaceWith(fallback),
   );
   return node;
 }
 
-// One photo or video in the item editor: labelled by kind, drag to reorder.
-function renderMediaTile(item, entry) {
-  const video = entry.kind === 'video';
-  const frame = el(
-    'div',
-    { className: 'frame' },
-    mediaThumb(entry),
-    el('span', { className: `badge ${entry.kind}` }, video ? 'Video' : 'Photo'),
-  );
-  if (video) frame.append(el('span', { className: 'play' }));
-  const first = item.media[0];
+// One photo or video in the item editor. Pressing it shows what can be done
+// with it; it can also be dragged to a new place.
+function renderMediaTile(item, entry, onSelect) {
+  const index = item.media.indexOf(entry);
+  const kind = entry.kind === 'video' ? 'Video' : 'Photo';
   const tile = el(
-    'div',
-    { className: 'tile', draggable: true, title: `${entry.name}. Drag to change the order.` },
-    frame,
-    entry === first
-      ? el('span', { className: 'hint' }, 'Main')
-      : el(
-          'button',
-          { className: 'link', title: 'Show this one first', onclick: () => moveMedia(item, entry.id, first.id, false) },
-          'Make main',
-        ),
-    el(
-      'div',
-      { className: 'row' },
-      ...removeControls(`media:${entry.id}`, () => removeMedia(item, entry), {
-        icon: true,
-        label: `Remove this ${video ? 'video' : 'photo'}`,
-        question: 'Remove?',
-        yes: 'Remove',
-      }),
-    ),
+    'button',
+    {
+      className: entry.id === selectedMediaId ? 'tile selected' : 'tile',
+      key: `tile:${entry.id}`,
+      draggable: true,
+      ariaPressed: String(entry.id === selectedMediaId),
+      ariaLabel: `${kind} ${index + 1} of ${item.media.length}, ${entry.name}`,
+      title: entry.name,
+      onclick: () => onSelect(entry.id),
+    },
+    mediaThumb(entry),
+    el('span', { className: index ? 'chip' : 'chip main' }, index ? String(index + 1) : 'Main'),
+    el('span', { className: 'badge' }, kind),
   );
+  tile.dataset.id = entry.id;
+  if (entry.kind === 'video') tile.append(el('span', { className: 'play' }));
 
   const isTarget = () => draggingMedia && draggingMedia.itemId === item.id && draggingMedia.id !== entry.id;
   const dropsAfter = (event) => {
@@ -477,192 +568,363 @@ function renderMediaTile(item, entry) {
   return tile;
 }
 
+// What can be done with the selected photo or video. Filled in place, because
+// redrawing the whole panel would reload every picture and video.
+function fillMediaBar(bar, item, confirming = false) {
+  const index = item.media.findIndex((entry) => entry.id === selectedMediaId);
+  if (index < 0) {
+    bar.className = '';
+    bar.replaceChildren(
+      item.media.length ? el('p', { className: 'hint' }, 'Press a photo or video to move or remove it.') : '',
+    );
+    return;
+  }
+  const entry = item.media[index];
+  const kind = entry.kind === 'video' ? 'video' : 'photo';
+  const move = (target, after, key) => {
+    focusNext = key;
+    moveMedia(item, entry.id, target.id, after);
+  };
+  bar.className = 'panelbox';
+  const title = el('strong', {}, `${kind === 'video' ? 'Video' : 'Photo'} ${index + 1} of ${item.media.length}`);
+  if (confirming) {
+    const keep = el('button', { onclick: () => fillMediaBar(bar, item) }, 'Keep');
+    bar.replaceChildren(
+      title,
+      el(
+        'div',
+        { className: 'row confirm' },
+        el('span', { className: 'ask' }, `Remove this ${kind}?`),
+        keep,
+        el('button', { className: 'danger', onclick: () => removeMedia(item, entry) }, 'Yes, remove'),
+      ),
+    );
+    keep.focus();
+    return;
+  }
+  const actions = [];
+  if (index) {
+    actions.push(
+      el('button', { key: 'media:main', onclick: () => move(item.media[0], false, `tile:${entry.id}`) }, 'Make this the main one'),
+    );
+  }
+  actions.push(
+    el('button', { key: 'media:earlier', disabled: !index, onclick: () => move(item.media[index - 1], false, 'media:earlier') }, 'Move earlier'),
+    el(
+      'button',
+      { key: 'media:later', disabled: index === item.media.length - 1, onclick: () => move(item.media[index + 1], true, 'media:later') },
+      'Move later',
+    ),
+    el('button', { className: 'warn', onclick: () => fillMediaBar(bar, item, true) }, `Remove this ${kind}`),
+  );
+  bar.replaceChildren(title, ...actions);
+}
+
 function itemSummary(item) {
-  return [item.price && `$${item.price}`, `Quantity ${item.quantity || 0}`, item.condition].filter(Boolean).join(' · ');
+  const price = String(item.price || '').trim().replace(/^\$/, '');
+  const quantity = String(item.quantity || '').trim();
+  return [price && `$${price}`, item.condition, quantity && quantity !== '1' && `Quantity ${quantity}`]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function renderItemList() {
-  app.append(
-    el(
-      'div',
-      { className: 'row' },
-      el('h2', { className: 'grow' }, 'My items'),
-      el('button', { className: 'primary', onclick: addItem }, 'Add an item'),
-    ),
-  );
   if (!items.length) {
     app.append(
+      el('h2', {}, 'The things you sell'),
       el(
         'p',
         { className: 'hint' },
-        ...rich("Your items are the things you sell. Press **Add an item** and type its title, price and description. Any website's boxes can then be filled in from the item you choose."),
+        "Add an item and type its title, price and description. Any website's boxes can then be filled in from the item you choose.",
       ),
+      el('div', { className: 'stack' }, el('button', { className: 'primary big', key: 'add-item', onclick: addItem }, 'Add your first item')),
     );
-  }
-  for (const item of items) {
-    app.append(
-      el(
-        'div',
-        { className: 'card' },
+  } else {
+    const add = el('button', { className: 'dashed', key: 'add-item', onclick: addItem }, '+ Add an item');
+    const top = el('div', { className: 'stack' }, add);
+    top.style.marginTop = '12px';
+    app.append(top);
+
+    // Only worth pointing out when it's a real choice that websites act on.
+    const chosen = items.length > 1 && websitesUseItems() ? activeItem() : null;
+    const list = el('div', { className: 'items' });
+    for (const item of items) {
+      const summary = el('span', { className: 'meta' }, el('span', {}, itemSummary(item)));
+      if (item === chosen) summary.append(el('span', { className: 'pill' }, 'In use on websites'));
+      list.append(
         el(
           'div',
-          { className: 'row' },
-          item.media[0]
-            ? mediaThumb(item.media[0])
-            : el('div', { className: 'thumb letter' }, (item.title.trim()[0] || '?').toUpperCase()),
+          { className: item === chosen ? 'item chosen' : 'item' },
           el(
-            'div',
-            { className: 'grow' },
-            el('strong', { className: 'line' }, itemName(item)),
-            el('span', { className: 'line muted' }, itemSummary(item)),
+            'button',
+            {
+              className: 'open',
+              key: `item:${item.id}`,
+              ariaLabel: `Open ${itemName(item)}${item === chosen ? ', in use on websites' : ''}`,
+              onclick: () => editItem(item.id),
+            },
+            item.media[0] ? mediaThumb(item.media[0], letterTile(item)) : letterTile(item),
+            el('span', { className: 'grow' }, el('span', { className: 'title' }, itemName(item)), summary),
+            icon('expand'),
           ),
-          el('button', { onclick: () => editItem(item.id) }, 'Open'),
-          ...removeControls(`item:${item.id}`, () => removeItem(item), {
-            icon: true,
-            label: `Delete ${itemName(item)}`,
-            question: `Delete "${itemName(item)}" and its photos?`,
-            yes: 'Delete',
-          }),
         ),
-      ),
-    );
+      );
+    }
+    app.append(list);
   }
 
   const csvPicker = el('input', { type: 'file', accept: '.csv,text/csv', hidden: true });
   csvPicker.addEventListener('change', () => {
-    if (csvPicker.files[0]) {
-      importCsv(csvPicker.files[0]).catch((error) => setStatus(`Couldn't load that file: ${error.message}`, 'error'));
-    }
+    const [file] = csvPicker.files;
+    // Cleared so that choosing the same file again still counts as a change.
+    csvPicker.value = '';
+    if (file) importCsv(file).catch((error) => setStatus(`Couldn't load that file: ${error.message}`, 'error'));
   });
-  app.append(
-    csvPicker,
+  const tools = el(
+    'details',
+    { className: 'more', open: Boolean(importUndo) },
+    el('summary', {}, 'Spreadsheet (advanced)'),
     el(
-      'details',
-      { className: 'more' },
-      el('summary', {}, 'Spreadsheet (advanced)'),
+      'p',
+      { className: 'hint' },
+      'Save all items to a file you can open in Excel or Google Sheets, or load a file back in.',
+    ),
+    el(
+      'div',
+      { className: 'row equal' },
       el(
-        'p',
-        { className: 'hint' },
-        'Save all items to a file you can open in Excel or Google Sheets, or load a file back in.',
+        'button',
+        { key: 'csv-save', title: 'Save all items as a spreadsheet file (.csv)', disabled: !items.length, onclick: exportCsv },
+        'Save to file',
       ),
-      el(
-        'div',
-        { className: 'row equal' },
-        el(
-          'button',
-          { title: 'Save all items as a spreadsheet file (.csv)', disabled: !items.length, onclick: exportCsv },
-          'Save to file',
-        ),
-        el('button', { title: 'Load items from a spreadsheet file (.csv)', onclick: () => csvPicker.click() }, 'Load from file…'),
-      ),
+      el('button', { key: 'csv-load', title: 'Load items from a spreadsheet file (.csv)', onclick: () => csvPicker.click() }, 'Load from file…'),
     ),
   );
+  if (importUndo) {
+    const undo = el('div', { className: 'stack' }, el('button', { key: 'csv-undo', onclick: undoImport }, 'Undo that load'));
+    undo.style.marginTop = '8px';
+    tools.append(undo);
+  }
+  app.append(csvPicker, tools);
 }
 
 // A labelled control that writes straight back to the item as the user types.
 function itemField(item, key, label, control) {
   control.value = item[key];
+  control.dataset.focus = `item:${key}`;
   control.addEventListener('input', () => {
     item[key] = control.value;
-    saveItems();
+    saveTyping();
   });
   return el('label', { className: 'field' }, el('span', {}, label), control);
 }
 
-// The user's own details for an item, and the form that adds another.
-function renderItemDetails(item) {
-  const section = el(
+// The list of the user's own details, which every item shares. Changing it is
+// kept apart from typing an item's values, because removing one reaches every item.
+function renderDetailList() {
+  const box = el(
     'div',
-    { className: 'stack' },
-    el('p', { className: 'hint' }, 'Add your own details, such as Brand or Size. Every item gets them, and boxes on a page can be filled in from them.'),
+    { className: 'panelbox' },
+    el('p', { className: 'hint' }, 'Details you add here appear on every item, and boxes on a page can be filled in from them.'),
   );
   for (const field of itemFields) {
-    const control = el('input', field.type === 'number' ? { type: 'number', step: 'any' } : {});
-    control.value = sourceValue(item, CUSTOM + field.id);
-    control.addEventListener('input', () => {
-      item.custom = { ...item.custom, [field.id]: control.value };
-      saveItems();
-    });
-    section.append(
+    const filled = items.filter((item) => item.custom && item.custom[field.id]).length;
+    const used = templatesUsing(CUSTOM + field.id);
+    const losses = [
+      filled && `${filled} ${filled === 1 ? 'item has' : 'items have'} something written for it`,
+      used && `${used} ${used === 1 ? 'template uses' : 'templates use'} it`,
+    ].filter(Boolean);
+    box.append(
       el(
         'div',
-        { className: 'row detail' },
-        el('label', { className: 'field grow' }, el('span', {}, field.name), control),
+        { className: 'row' },
+        el(
+          'span',
+          { className: 'grow' },
+          el('strong', { className: 'line' }, field.name),
+          el(
+            'span',
+            { className: 'line meta' },
+            `${field.type === 'number' ? 'Number' : 'Text'} · ${filled ? `filled in on ${filled} ${filled === 1 ? 'item' : 'items'}` : 'not filled in yet'}`,
+          ),
+        ),
         ...removeControls(`detail:${field.id}`, () => removeItemField(field), {
-          icon: true,
-          label: `Remove ${field.name}`,
-          question: `Remove "${field.name}" from every item?`,
+          label: 'Remove',
+          question: `Remove "${field.name}" from all ${items.length} items?`,
+          detail: losses.length ? `${losses.join(', and ')}. That will be erased.` : '',
         }),
       ),
     );
   }
 
-  const name = el('input', { className: 'grow', placeholder: 'New detail name', ariaLabel: 'Name of the new detail' });
-  const type = el('select', { ariaLabel: 'Kind of detail' }, el('option', { value: 'text' }, 'Text'), el('option', { value: 'number' }, 'Number'));
-  const add = () => addItemField(name.value.trim(), type.value);
+  const name = el('input', { key: 'detail:name', placeholder: 'For example: Brand, Size, Colour' });
+  const type = el('select', { key: 'detail:type' }, el('option', { value: 'text' }, 'Text'), el('option', { value: 'number' }, 'Number'));
+  const add = async () => {
+    const added = name.value.trim();
+    focusNext = 'detail:name';
+    if (await addItemField(added, type.value)) setStatus(`Added "${added}" to every item.`, 'ok');
+    else name.focus();
+  };
   name.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') add();
   });
-  section.append(el('div', { className: 'row add' }, name, type, el('button', { onclick: add }, 'Add')));
-  return section;
+  box.append(
+    el('label', { className: 'field' }, el('span', {}, 'Name of a new detail'), name),
+    el('label', { className: 'field' }, el('span', {}, 'What it holds'), type),
+    el(
+      'div',
+      { className: 'row equal' },
+      el('button', { key: 'detail:add', onclick: add }, 'Add detail'),
+      el(
+        'button',
+        {
+          key: 'detail:done',
+          onclick: () => {
+            detailsOpen = false;
+            pendingRemove = null;
+            focusNext = 'detail:change';
+            render();
+          },
+        },
+        'Done',
+      ),
+    ),
+  );
+  return box;
 }
 
 function renderItemEditor(item) {
   const condition = el('select');
   for (const name of CONDITIONS) condition.append(el('option', { value: name }, name));
 
-  const picker = el('input', { type: 'file', multiple: true, accept: 'image/*,video/*', hidden: true });
-  picker.addEventListener('change', () => addMedia(item, [...picker.files]));
-
-  const media = el('div', { className: 'media' });
-  for (const entry of item.media) media.append(renderMediaTile(item, entry));
-
-  const back = iconButton('back', 'Back to all items', { className: 'back', onclick: () => editItem(null) });
+  const back = iconButton('back', 'Back to all items', { className: 'back', key: 'back', onclick: () => editItem(null) });
   back.append('All items');
+  const top = el('div', { className: 'row wrap' });
+  if (itemReturn && sites[itemReturn]) {
+    const host = itemReturn;
+    const home = iconButton('back', `Back to ${host}`, {
+      className: 'back',
+      key: 'back-site',
+      onclick: () => {
+        leaveItem();
+        view = 'sites';
+        itemReturn = null;
+        editingItemId = null;
+        nextScroll = 0;
+        render();
+      },
+    });
+    home.append(`Back to ${host}`);
+    top.append(home);
+  }
+  top.append(back);
 
-  app.append(
-    el('div', { className: 'row' }, back),
-    el('h2', {}, 'Item details'),
+  // The heading follows the title as it's typed.
+  const heading = el('h2', { className: 'name' }, item.title || 'New item');
+  const title = itemField(item, 'title', 'Title', el('input', { placeholder: 'What is it? For example: Oak dining table' }));
+  title.lastChild.addEventListener('input', () => (heading.textContent = item.title || 'New item'));
+
+  app.append(top, heading, el('p', { className: 'hint' }, 'Changes save by themselves.'));
+
+  // Which item websites fill in from only needs saying when there's a choice.
+  if (items.length > 1) {
+    app.append(
+      item === activeItem()
+        ? el('p', {}, el('span', { className: 'pill' }, 'In use on websites'))
+        : el('div', { className: 'stack' }, el('button', { key: 'use-item', onclick: () => useItem(item) }, 'Use this item on websites')),
+    );
+  }
+
+  // Plain text inputs: a number input throws away anything it doesn't like,
+  // so "$380" would save as nothing.
+  const form = el(
+    'div',
+    { className: 'stack' },
+    title,
     el(
       'div',
-      { className: 'stack' },
-      itemField(item, 'title', 'Title', el('input', { placeholder: 'What is it? For example: Oak dining table' })),
-      el(
-        'div',
-        { className: 'columns' },
-        itemField(item, 'price', 'Price', el('input', { type: 'number', min: '0', step: '0.01', placeholder: '0.00' })),
-        itemField(item, 'quantity', 'Quantity', el('input', { type: 'number', min: '0', step: '1' })),
-        itemField(item, 'condition', 'Condition', condition),
-      ),
-      itemField(
-        item,
-        'description',
-        'Description',
-        el('textarea', { className: 'tall', placeholder: 'Describe it: size, age, condition, anything a buyer should know' }),
-      ),
+      { className: 'columns' },
+      itemField(item, 'price', 'Price', el('input', { inputMode: 'decimal', placeholder: '0.00' })),
+      itemField(item, 'quantity', 'Quantity', el('input', { inputMode: 'numeric' })),
+      itemField(item, 'condition', 'Condition', condition),
     ),
-    el('h2', {}, 'More details'),
-    renderItemDetails(item),
-    el('h2', {}, 'Photos and videos'),
-  );
-  app.append(
-    el(
-      'p',
-      { className: 'hint' },
-      item.media.length ? 'The first one is the main photo. Drag one to change the order.' : 'No photos or videos yet.',
+    itemField(
+      item,
+      'description',
+      'Description',
+      el('textarea', { className: 'tall', placeholder: 'Describe it: size, age, condition, anything a buyer should know' }),
     ),
   );
+  form.style.marginTop = '12px';
+  for (const field of itemFields) {
+    const control = el('input', field.type === 'number' ? { inputMode: 'decimal' } : {});
+    control.value = sourceValue(item, CUSTOM + field.id);
+    control.dataset.focus = `item:${CUSTOM}${field.id}`;
+    control.addEventListener('input', () => {
+      item.custom = { ...item.custom, [field.id]: control.value };
+      saveTyping();
+    });
+    form.append(el('label', { className: 'field' }, el('span', {}, field.name), control));
+  }
+  form.append(
+    detailsOpen
+      ? renderDetailList()
+      : el(
+          'button',
+          {
+            className: 'dashed',
+            key: 'detail:change',
+            onclick: () => {
+              detailsOpen = true;
+              focusNext = 'detail:name';
+              render();
+            },
+          },
+          itemFields.length ? 'Change the list of details' : '+ Add your own details, such as Brand or Size',
+        ),
+  );
+  app.append(form);
+
+  const count = item.media.length;
+  app.append(el('h2', {}, count ? `Photos and videos (${count})` : 'Photos and videos'));
+  if (!count) app.append(el('p', { className: 'hint' }, 'No photos or videos yet.'));
+
+  const grid = el('div', { className: 'media' });
+  const bar = el('div');
+  const select = (id) => {
+    selectedMediaId = selectedMediaId === id ? null : id;
+    for (const tile of grid.children) {
+      const on = tile.dataset.id === selectedMediaId;
+      tile.classList.toggle('selected', on);
+      tile.ariaPressed = String(on);
+    }
+    fillMediaBar(bar, item);
+  };
+  for (const entry of item.media) grid.append(renderMediaTile(item, entry, select));
+  fillMediaBar(bar, item);
+
+  const picker = el('input', { type: 'file', multiple: true, accept: 'image/*,video/*', hidden: true });
+  const adder = el('button', { key: 'add-media', onclick: () => picker.click() }, 'Add photos or videos');
+  picker.addEventListener('change', () => addMedia(item, [...picker.files], adder));
+
+  const parts = [`"${itemName(item)}"`];
+  if (count) parts.push(`its ${photos(count)}`);
+  const stack = el('div', { className: 'stack' }, adder);
+  stack.style.marginTop = '8px';
   app.append(
-    media,
+    grid,
+    bar,
     picker,
-    el('div', { className: 'stack' }, el('button', { onclick: () => picker.click() }, 'Add photos or videos')),
+    stack,
     el(
       'div',
       { className: 'row end' },
       ...removeControls(`item:${item.id}`, () => removeItem(item), {
         label: 'Delete this item',
-        question: `Delete "${itemName(item)}" and its photos?`,
-        yes: 'Delete',
+        className: 'warn',
+        question: `Delete ${parts.join(' and ')}?`,
+        detail: "This can't be undone.",
+        yes: 'Delete item',
       }),
     ),
   );

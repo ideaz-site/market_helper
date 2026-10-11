@@ -12,19 +12,23 @@ A Chrome extension that saves sites, remembers their text fields, and pastes tex
 Clicking the extension opens it in Chrome's side panel, which stays open while you use the page. The panel uses everyday words; the code calls a "box" a field and a "template" a profile.
 
 1. On a website, click the extension and press **Save this website**.
-2. Press **Choose a box on the page**. Every text box that isn't saved yet gets a purple overlay that turns green on hover; click one to save it. **Stop** in the banner, or Esc, cancels. So does doing anything else in the panel, switching tabs, or closing the panel.
-3. Type what should go in that box, then press **Fill in** beside it, or **Fill in the page** for all of them.
+2. Press **Choose a box on the page**. Every text box on the page gets an overlay: purple ones can be chosen, green ones already are. Click each box you want; choosing carries on until you press **Done** (on the page or in the panel) or Esc. The page itself doesn't respond while you choose. Clicking a box you chose in this round takes it back out. Doing anything else in the panel, switching tabs, or closing the panel also ends choosing.
+3. Each box is one line in **Boxes to fill in**. Press a box to open it, type what should go in it, and press **Fill in the page**.
    A box with no text is filled with whatever you last copied.
 
-Messages about what just happened appear in a bar pinned to the bottom of the panel.
+A box's line shows what it will be filled with, and a red **!** when something needs putting right, such as an item with nothing for that detail. Opening a box also offers **Fill in just this box**, **Rename** (for when the page's own label isn't a helpful name) and **Remove this box**.
 
-Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition, description, or any detail you added yourself). Item details come from the item chosen under **Fill in using this item**, so one template can fill a listing form for any of your items.
+Messages about what just happened appear in a bar pinned to the bottom of the panel; **OK** puts it away. After filling in, any box that was left out is marked with the reason.
 
-Tick **Also add the item's photos and videos to the page** and **Fill in the page** also hands the chosen item's photos and videos to the page's own file chooser, as if you had picked the files yourself; the website then uploads them. Photos go to a chooser that takes images and videos to one that takes video. The part of the page where photos are added has to be open. Pressing Fill in the page twice adds them twice.
+Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition, description, or any detail you added yourself). Item details come from the item chosen under **Item to use**, so one template can fill a listing form for any of your items.
 
-**Templates** belong to a website: each one is a separate set of boxes and text for it. A website starts with one; **Add another** makes more, and then you can switch between them, rename and delete them. A new template starts empty. When you move to another website, it opens on the template with the same name if it has one, otherwise on its own.
+Tick **Also add its photos and videos** and **Fill in the page** also hands the chosen item's photos and videos to the page's own file chooser, as if you had picked the files yourself; the website then uploads them. Photos go to a chooser that takes images and videos to one that takes video. The part of the page where photos are added has to be open. Pressing Fill in the page twice adds them twice.
 
-**All my websites** lists every saved website with its templates underneath; the arrow hides or shows them. **Fill in** beside a template fills its boxes in the current tab or any open tab on that website. Drag a template to reorder it, or click its name to open it. Removing anything asks first.
+**Templates** belong to a website: each one is a separate set of boxes and text for it. A website starts with one; **Add another** makes more, and then a dropdown switches between them and **Options** offers New, Rename and Delete. A new template starts empty. When you move to another website, it opens on the template with the same name if it has one, otherwise on its own.
+
+When the browser isn't on the website you're looking at, the panel says so and offers **Go to** (or **Open**) that website.
+
+**All my websites** lists every saved website with its templates underneath, the one you're on first; the arrow hides or shows the others' templates. **Fill in** beside a template fills its boxes in the tab you're looking at when it's on that website, otherwise in another open tab on it. Drag a template by its dots to reorder it, or focus the dots and press the up or down arrow; press its name to open it. Removing anything asks first, and Esc backs out.
 
 ## Updating
 
@@ -43,19 +47,23 @@ The Web Store package is built by `store/build-zip.sh`, which leaves out the hel
 
 ## My items
 
-The **My items** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
+The **My items** tab keeps a list of the items you sell. Press an item to open it. Each has a title, price, quantity, condition, description, and any number of photos and videos. Changes save by themselves. An item you add and leave empty is thrown away.
 
-Under **More details** you can add your own details, such as Brand or Size, as text or a number. A detail you add appears on every item, and in each box's **Fill this box with** choice alongside the built-in ones. Removing a detail removes it from every item.
+When websites fill boxes from items and you have more than one, the list marks the one **In use on websites**; open another item and press **Use this item on websites** to switch. Deleting the item in use moves websites on to the next one, and says so.
 
-Each photo and video is labelled **Photo** or **Video**, and videos also show a play symbol. Drag one to reorder, or press **Make main** under it to move it to the front; the first is the item's thumbnail in the list.
+**Change the list of details** lets you add your own details, such as Brand or Size, as text or a number. A detail you add appears on every item, and in each box's **Fill this box with** choice alongside the built-in ones. Removing a detail removes it from every item, and the question says how many items and templates that touches.
+
+Each photo and video is labelled **Photo** or **Video**, and numbered; the first is the main one and the item's picture in the list. Press one to move it earlier or later, make it the main one, or remove it. You can also drag one to a new place.
+
+To delete an item, open it and press **Delete this item**.
 
 ### Spreadsheets and Google Sheets
 
-Under **Spreadsheet (advanced)** at the bottom of My items, **Save to file** downloads every item as `market-helper-items.csv` and **Load from file…** reads one back.
+Under **Spreadsheet (advanced)** at the bottom of My items, **Save to file** downloads every item as `market-helper-items.csv` and **Load from file…** reads one back. **Undo that load** then puts your items back as they were, until you open an item.
 
 To edit in Google Sheets: save to a file, then in Sheets use File → Import → Upload. Edit or add rows, then File → Download → Comma-separated values, and load that file here.
 
-- Keep the `id` column. A row with an `id` updates that item and keeps its photos and videos; a row without one becomes a new item.
+- Keep the `id` column. A row with an `id` updates that item and keeps its photos and videos; a row without one becomes a new item, so a file that lost its `id` column adds everything again.
 - Items that aren't in the file are left as they are. Loading a file never deletes.
 - Details you added yourself are columns too, named as you named them. A column whose name matches no detail is ignored.
 - Only the columns in the file are changed. The `media` column lists file names for reference and is ignored when loading.
@@ -64,7 +72,7 @@ To edit in Google Sheets: save to a file, then in Sheets use File → Import →
 ## Storage
 
 Sites are keyed by hostname. Sites, profiles and item details are stored locally in `chrome.storage.local`; photos and videos are stored locally in IndexedDB.
-The dot beside a box is green when the box is on the current page and red when it isn't.
+The dot beside a box is green when the box is on the current page and grey when it isn't.
 
 ## Limits
 

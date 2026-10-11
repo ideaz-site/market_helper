@@ -1,10 +1,22 @@
+/* One palette for the whole panel. --line separates things; controls use
+   --line-strong, which is dark enough to see where a control ends. */
 :root {
   color-scheme: light dark;
+  --bg: light-dark(#f6f5f9, #16141a);
+  --surface: light-dark(#ffffff, #221f29);
+  --surface-2: light-dark(#eeecf3, #2c2835);
+  --line: light-dark(#dcd8e3, #3a3544);
+  --line-strong: light-dark(#8f899c, #7a738a);
+  --text: light-dark(#1c1a21, #f1eef6);
+  --text-2: light-dark(#5c566a, #b3acc2);
   --accent: #7c3aed;
-  --border: color-mix(in srgb, currentColor 30%, transparent);
-  --muted: color-mix(in srgb, currentColor 72%, transparent);
-  --link: light-dark(#6d28d9, #c4b5fd);
-  --warn: light-dark(#b91c1c, #f87171);
+  --accent-soft: light-dark(#ede9fe, #33265c);
+  --accent-text: light-dark(#5b21b6, #d4c8ff);
+  --ok: light-dark(#166534, #86efac);
+  --ok-soft: light-dark(#ecfdf3, #11281b);
+  --danger: light-dark(#b91c1c, #fca5a5);
+  --danger-soft: light-dark(#fef2f2, #2e1416);
+  --danger-fill: #b91c1c;
 }
 
 * {
@@ -14,6 +26,8 @@
 body {
   margin: 0;
   padding: 12px;
+  background: var(--bg);
+  color: var(--text);
   font: 15px/1.45 system-ui, sans-serif;
 }
 
@@ -22,48 +36,44 @@ h1 {
   font-size: 17px;
 }
 
-.header {
-  margin-bottom: 10px;
-}
-
-.header h1 {
-  margin: 0;
-}
-
 h2 {
-  margin: 18px 0 6px;
+  margin: 20px 0 8px;
   font-size: 15px;
   font-weight: 700;
 }
 
 h2.name {
   margin-top: 12px;
-  overflow: hidden;
   font-size: 17px;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 p {
   margin: 0 0 8px;
 }
 
+/* Buttons: outline by default; primary for the one thing the screen is for;
+   danger to confirm a removal; link for small side actions. */
 button {
   min-height: 36px;
   padding: 6px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: transparent;
+  background: var(--surface);
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
-  border-color: var(--accent);
+button:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--accent-text);
 }
 
-button:disabled {
-  opacity: 0.45;
+button:disabled,
+button[aria-disabled='true'] {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text-2);
   cursor: default;
 }
 
@@ -71,16 +81,42 @@ button.primary {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled, [aria-disabled='true']) {
+  filter: brightness(1.08);
+}
+
+button.primary:disabled,
+button.primary[aria-disabled='true'] {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text-2);
 }
 
 button.danger {
-  border-color: #dc2626;
-  background: #dc2626;
+  border-color: var(--danger-fill);
+  background: var(--danger-fill);
   color: #fff;
 }
 
+button.warn {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 button.big {
+  min-height: 48px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+button.dashed {
   min-height: 44px;
+  border: 1.5px dashed var(--accent-text);
+  background: transparent;
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -93,9 +129,26 @@ button.icon {
   padding: 0;
 }
 
-button.icon svg {
+svg {
+  flex: none;
   width: 20px;
   height: 20px;
+}
+
+button.back {
+  gap: 2px;
+  margin-top: 10px;
+  padding: 0 12px 0 4px;
+}
+
+button.link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  text-decoration: underline;
 }
 
 button:focus-visible,
@@ -103,33 +156,19 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--accent-text);
   outline-offset: 1px;
-}
-
-button.back {
-  margin-top: 10px;
-  gap: 2px;
-  padding: 0 12px 0 4px;
-}
-
-button.link {
-  min-height: 0;
-  padding: 4px 2px;
-  border: 0;
-  color: var(--link);
-  text-decoration: underline;
 }
 
 input,
 select,
 textarea {
   width: 100%;
-  min-height: 36px;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
+  min-height: 40px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: transparent;
+  background: var(--surface);
   color: inherit;
   font: inherit;
 }
@@ -144,27 +183,28 @@ input[type='checkbox'] {
   accent-color: var(--accent);
 }
 
-.check {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-
 textarea {
   min-height: 64px;
   resize: vertical;
 }
 
+textarea.tall {
+  min-height: 110px;
+}
+
 .row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
-.row:has(> h2) {
-  margin: 12px 0 8px;
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.row.wrap {
+  flex-wrap: wrap;
 }
 
 .row.equal > * {
@@ -173,16 +213,191 @@ textarea {
 
 .row.end {
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
-.row + .row.equal {
-  margin-top: 6px;
+.stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field > span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hint,
+.muted {
+  color: var(--text-2);
+}
+
+.hint {
+  font-size: 14px;
+}
+
+.warn-text {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Words for screen readers where the eye gets a dot or a colour. */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The two views. The selected one is outlined, not filled: purple fill means
+   "this does something". */
+.tabs {
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-2);
 }
 
 .tabs button {
-  min-height: 42px;
+  flex: 1;
+  min-height: 40px;
+  border: 2px solid transparent;
+  background: none;
+  color: var(--text-2);
   font-weight: 600;
+}
+
+.tabs button[aria-pressed='true'] {
+  border-color: var(--accent-text);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.card {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.card > .row,
+.card > .hint {
+  padding: 8px;
+}
+
+.card > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.card .hint {
+  margin: 0;
+}
+
+.host {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* The website the browser is on, when it isn't saved yet. */
+.here {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.here button {
+  margin-top: 6px;
+}
+
+button.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 2px;
+  border-color: transparent;
+  background: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.profile {
+  min-height: 52px;
+}
+
+.profile.dragging {
+  opacity: 0.4;
+}
+
+.profile.drop-before {
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.profile.drop-after {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+button.grip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-width: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--text-2);
+  cursor: grab;
+}
+
+button.tname {
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.line {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.tname .title {
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.meta {
+  color: var(--text-2);
+  font-size: 13px;
 }
 
 /* A remove question drops onto its own line under the row it belongs to. */
@@ -194,22 +409,183 @@ textarea {
   flex: 1 0 100%;
   flex-wrap: wrap;
   justify-content: flex-end;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--danger-soft);
+}
+
+.row.equal > .confirm {
+  flex: 1 0 100%;
 }
 
 .confirm .ask {
   flex: 1 0 100%;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
-.hint {
-  color: var(--muted);
+.confirm .detail {
+  flex: 1 0 100%;
   font-size: 14px;
 }
 
-.warn {
+.notice {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+
+.notice p {
   margin: 0;
-  color: var(--warn);
-  font-size: 14px;
+}
+
+/* Everything the everyday press needs, in one place. */
+.fillcard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.fillcard .hint {
+  margin: 0;
+}
+
+.field.pick {
+  margin-bottom: 10px;
+}
+
+.fillcard .field.pick {
+  margin: 0;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.check .meta {
+  display: block;
+}
+
+/* The boxes of a template: one line each until opened. */
+.boxes {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.box + .box {
+  border-top: 1px solid var(--line);
+}
+
+.box.new {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+button.box-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px 8px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+button.box-head:hover,
+button.tname:hover,
+.item .open:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+button.box-head:focus-visible,
+.item .open:focus-visible {
+  outline-offset: -3px;
+}
+
+.box-head .title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.box-head .sub {
+  display: block;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.box-head .sub.warn-text {
+  color: var(--danger);
+}
+
+.box-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 2px 12px 12px;
+}
+
+.box-body .hint {
+  margin: 0;
+}
+
+.dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.dot.found {
+  background: var(--ok);
+}
+
+/* Something the user has to put right gets a mark, not just a colour. */
+.dot.alert {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 -4px;
+  background: var(--danger);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.preview {
+  max-height: 96px;
+  margin: 0;
+  padding: 7px 9px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--surface-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .steps {
@@ -226,213 +602,188 @@ textarea {
 }
 
 .more summary {
-  padding: 6px 0;
-  color: var(--muted);
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  color: var(--text-2);
   cursor: pointer;
 }
 
+.more summary::before {
+  content: '▸';
+  width: 18px;
+}
+
+.more[open] summary::before {
+  content: '▾';
+}
+
 .footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin: 24px 0 0;
-  color: var(--muted);
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
   font-size: 13px;
 }
 
-.row > h2 {
-  margin: 0;
+/* My items */
+.items {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
 }
 
-.row > .grow {
-  flex: 1;
-  min-width: 0;
+.item + .item {
+  border-top: 1px solid var(--line);
+}
+
+.item.chosen {
+  background: var(--accent-soft);
+}
+
+.item .open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 6px 8px 10px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.item .title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.item .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.item .meta > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+.item svg {
+  color: var(--text-2);
 }
 
-.card .hint {
-  margin: 0;
-}
-
-/* Names in a card wrap, so a long one is never cut off. */
-.card strong.grow,
-.card .line {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.profile {
-  padding: 2px 0;
-}
-
-.profile.dragging {
-  opacity: 0.4;
-}
-
-.profile.drop-before {
-  box-shadow: 0 -2px 0 var(--accent);
-}
-
-.profile.drop-after {
-  box-shadow: 0 2px 0 var(--accent);
-}
-
-.profile button.link {
-  text-align: left;
-}
-
-.grip {
+.thumb {
   flex: none;
-  padding: 0 2px;
-  color: var(--muted);
-  font-size: 18px;
-  cursor: grab;
-}
-
-.stack {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-
-.stack.fill {
-  margin-bottom: 10px;
-}
-
-.row.detail {
-  align-items: flex-end;
-}
-
-.row.add select {
-  flex: none;
-  width: auto;
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.field {
-  display: grid;
-  gap: 3px;
-}
-
-.field > span {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-/* The item chooser is a setting for the whole list, so it's set apart from the boxes. */
-.field.pick {
-  margin-bottom: 10px;
-  padding: 10px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.preview {
-  max-height: 96px;
-  margin: 0;
-  padding: 6px 9px;
-  overflow: auto;
-  border: 1px dashed var(--border);
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-textarea.tall {
-  min-height: 110px;
-}
-
-.line {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: var(--surface-2);
+  object-fit: cover;
 }
 
 .thumb.letter {
   display: grid;
   place-items: center;
-  font-size: 20px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 18px;
   font-weight: 600;
 }
 
-.thumb {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 6px;
-  background: var(--border);
-  object-fit: cover;
+/* A block of controls for one job, set apart from the form around it. */
+.panelbox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.panelbox .hint,
+.panelbox p {
+  margin: 0;
 }
 
 .media {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
   gap: 8px;
   margin-bottom: 8px;
 }
 
-.media .tile {
-  display: grid;
-  gap: 4px;
-  justify-items: center;
-  cursor: grab;
+button.tile {
+  position: relative;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-2);
+  aspect-ratio: 1;
+  cursor: pointer;
 }
 
-.media .tile.dragging {
+button.tile.selected {
+  outline: 3px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+button.tile.dragging {
   opacity: 0.4;
 }
 
-.media .tile.drop-before {
-  box-shadow: -5px 0 0 -2px var(--accent);
+button.tile.drop-before {
+  box-shadow: -5px 0 0 -1px var(--accent);
 }
 
-.media .tile.drop-after {
-  box-shadow: 5px 0 0 -2px var(--accent);
+button.tile.drop-after {
+  box-shadow: 5px 0 0 -1px var(--accent);
 }
 
-.media .frame {
-  position: relative;
-  width: 100%;
-}
-
-.media .thumb {
+.tile .thumb {
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 1;
+  height: 100%;
+  border-radius: 0;
 }
 
-.badge {
+.tile .chip,
+.tile .badge {
   position: absolute;
-  top: 4px;
   left: 4px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgb(0 0 0 / 70%);
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: rgb(0 0 0 / 72%);
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-.badge.video {
+.tile .chip {
+  top: 4px;
+}
+
+.tile .chip.main {
   background: var(--accent);
+}
+
+.tile .badge {
+  bottom: 4px;
 }
 
 /* Play button over a video's first frame. */
@@ -453,45 +804,70 @@ textarea.tall {
   top: 9px;
   left: 13px;
   border: 8px solid transparent;
-  border-left: 12px solid #fff;
   border-right: 0;
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--border);
-}
-
-.dot.found {
-  background: #16a34a;
-}
-
-.dot.missing {
-  background: #dc2626;
+  border-left: 12px solid #fff;
 }
 
 /* Feedback stays pinned to the bottom of the panel so it can't scroll out of sight. */
 #status {
   position: sticky;
   bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 12px -12px -12px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent) 16%, Canvas);
-  font-size: 15px;
+  padding: 10px 12px 10px 9px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  background: var(--surface-2);
+  font-size: 14px;
 }
 
-#status:empty {
+#status[hidden] {
   display: none;
 }
 
+#status .message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#status button {
+  flex: none;
+}
+
+#status.ok {
+  border-left-color: var(--ok);
+  background: var(--ok-soft);
+}
+
 #status.error {
-  background: color-mix(in srgb, #dc2626 18%, Canvas);
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+#status.busy .message::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #status.busy .message::before {
+    animation: none;
+  }
 }
