@@ -111,7 +111,11 @@ function inPage(action, fields, text) {
     if (!el.labels || !el.labels[0]) return '';
     const copy = el.labels[0].cloneNode(true);
     for (const control of copy.querySelectorAll('input, textarea, select, [contenteditable]')) control.remove();
-    return copy.textContent;
+    const text = copy.textContent.trim();
+    // Multi-line boxes that grow as you type keep a hidden copy of their text
+    // beside them, inside the label.
+    const typed = el instanceof HTMLTextAreaElement ? el.value.trim() : '';
+    return typed && text.endsWith(typed) ? text.slice(0, -typed.length) : text;
   };
   const describe = (el) =>
     (
