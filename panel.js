@@ -717,10 +717,17 @@ function renderField(profile, field, onPage) {
     const item = activeItem();
     const detail = sourceName(field.source);
     const value = item && detail ? sourceValue(item, field.source) : '';
-    let note = 'Add an item under My items first.';
-    if (!detail) note = 'That detail was removed. Choose something else above.';
-    else if (item) note = `"${itemName(item)}" has no ${detail} yet. Add one under My items.`;
-    card.append(el('p', { className: value ? 'preview' : 'preview muted' }, value || note));
+    // With nothing to show, say why and offer the way to put it right.
+    let note = ['That detail was removed. Choose something else above.'];
+    if (!item) {
+      note = ['You have no items yet. ', el('button', { className: 'link', onclick: () => openItems(addItem) }, 'Add an item')];
+    } else if (detail) {
+      note = [
+        `"${itemName(item)}" has no ${detail} yet. `,
+        el('button', { className: 'link', onclick: () => openItems(() => editItem(item.id)) }, `Add it to "${itemName(item)}"`),
+      ];
+    }
+    card.append(el('p', { className: value ? 'preview' : 'preview muted' }, ...(value ? [value] : note)));
   } else {
     const text = el('textarea', {
       value: field.text,
@@ -744,6 +751,13 @@ function renderField(profile, field, onPage) {
     );
   }
   return card;
+}
+
+// Switches to My items and carries on there.
+function openItems(then) {
+  view = 'catalog';
+  pendingRemove = null;
+  then();
 }
 
 // Whether filling in from this template takes anything from the chosen item.
