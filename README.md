@@ -20,6 +20,8 @@ Messages about what just happened appear in a bar pinned to the bottom of the pa
 
 Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition or description). Item details come from the item chosen under **Fill in using this item**, so one template can fill a listing form for any of your items.
 
+Tick **Also add the item's photos and videos to the page** and **Fill in the page** also hands the chosen item's photos and videos to the page's own file chooser, as if you had picked the files yourself; the website then uploads them. Photos go to a chooser that takes images and videos to one that takes video. The part of the page where photos are added has to be open. Pressing Fill in the page twice adds them twice.
+
 **Templates** belong to a website: each one is a separate set of boxes and text for it. A website starts with one; **Add another** makes more, and then you can switch between them, rename and delete them. A new template starts empty. When you move to another website, it opens on the template with the same name if it has one, otherwise on its own.
 
 **All my websites** lists every saved website with its templates underneath; the arrow hides or shows them. **Fill in** beside a template fills its boxes in the current tab or any open tab on that website. Drag a template to reorder it, or click its name to open it. Removing anything asks first.
@@ -64,5 +66,6 @@ The dot beside a box is green when the box is on the current page and red when i
 ## Limits
 
 - Boxes inside iframes can't be chosen.
+- Photos and videos can only be added where the page has a file chooser (`<input type="file">`). A page that only accepts files dragged onto it, or that creates its chooser only after you press its own add-photo button, has no place for them.
 - A box with no stable attribute (name, aria-label, placeholder, test id, id) is saved by its position in the page. Positions change when a site redraws, so such a box is found again by its label; if two boxes on the page share that label, it can't be told apart and shows as not on the page.
 - Because the panel follows you across tabs, the extension asks for access to all sites.

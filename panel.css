@@ -134,6 +134,24 @@ textarea {
   font: inherit;
 }
 
+input[type='checkbox'] {
+  flex: none;
+  width: 22px;
+  min-height: 0;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
 textarea {
   min-height: 64px;
   resize: vertical;

@@ -18,7 +18,7 @@ This data never leaves your browser. Removing a box, template, website, item, ph
 
 ## What it accesses
 
-- **Web pages.** When you press Choose a box on the page or Fill in, the extension runs on that page to highlight its text fields or to fill in your saved text. It also checks whether your saved fields are present on a saved site you have open. It does not read, record or send page content anywhere.
+- **Web pages.** When you press Choose a box on the page or Fill in, the extension runs on that page to highlight its text fields or to fill in your saved text. It also checks whether your saved fields are present on a saved site you have open. If you turn on adding photos for a template, pressing Fill in the page also puts the chosen item's photos and videos into that page's file chooser, and the website you are on then uploads them as it would files you picked yourself. The extension does not read, record or send page content anywhere.
 - **Clipboard.** If you paste into a field that has no saved text, the extension reads your clipboard once and puts that text into the field. Clipboard contents are not stored or sent anywhere.
 - **Tab addresses.** The extension reads the address of the current tab to show which saved site you are on.
 

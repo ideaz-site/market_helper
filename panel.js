@@ -7,7 +7,8 @@ const app = document.getElementById('app');
 const statusEl = document.getElementById('status');
 
 // host -> { host, addedAt, collapsed, activeProfile, order: [profile id],
-//           profiles: { id -> { id, name, fields } } }
+//           profiles: { id -> { id, name, fields, media } } }
+// media: filling in the page also adds the chosen item's photos and videos.
 // A field is { id, selector, label, text, source }: source names the catalog
 // item detail it pastes (see ITEM_SOURCES); without one it pastes its own text.
 let sites = {};
@@ -92,6 +93,10 @@ function el(tag, props = {}, ...children) {
 // Interface text with **bold** markers, as nodes.
 function rich(text) {
   return text.split('**').map((part, i) => (i % 2 ? el('strong', {}, part) : part));
+}
+
+function photos(count) {
+  return `${count} ${count === 1 ? 'photo or video' : 'photos and videos'}`;
 }
 
 function boxes(count) {
@@ -255,7 +260,11 @@ async function pasteOne(field) {
 // Fills in every box of one of the site's templates (profiles in the code).
 async function pasteProfile(site, profile) {
   const total = profile.fields.length;
-  if (!total) return setStatus(`"${profile.name}" has no boxes yet. Open ${site.host} and choose some.`, 'error');
+  const item = profile.media ? activeItem() : null;
+  const wanted = item ? item.media.length : 0;
+  if (!total && !wanted) {
+    return setStatus(`"${profile.name}" has no boxes yet. Open ${site.host} and choose some.`, 'error');
+  }
   try {
     const tabId = await tabFor(site.host);
     if (tabId === null) return setStatus(`Open ${site.host} in a tab first, then press Fill in again.`, 'error');
@@ -265,11 +274,21 @@ async function pasteProfile(site, profile) {
       if (result === 'filled' || result === 'clipboard') filled++;
     }
     const rest = total - filled;
-    setStatus(
+    let message =
       `Filled in ${filled} of ${boxes(total)} on ${site.host}.` +
-        (rest ? ` The other ${rest} had nothing to fill in or ${rest === 1 ? "isn't" : "aren't"} on this page.` : ''),
-      filled ? 'ok' : 'error',
-    );
+      (rest ? ` The other ${rest} had nothing to fill in or ${rest === 1 ? "isn't" : "aren't"} on this page.` : '');
+    let added = 0;
+    if (wanted) {
+      setStatus(`Adding ${photos(wanted)}…`);
+      ({ added } = await uploadMedia(tabId, item));
+      message += added ? ` Added ${photos(added)}.` : '';
+      if (added < wanted) {
+        message += added
+          ? ` The page had no place for the other ${wanted - added}.`
+          : " Couldn't find where to add photos on this page. Open the part of the page where photos go, then try again.";
+      }
+    }
+    setStatus(message, filled || added ? 'ok' : 'error');
   } catch (error) {
     setStatus(`Couldn't fill in the page: ${error.message}`, 'error');
   }
@@ -730,8 +749,15 @@ function renderField(profile, field, onPage) {
   return card;
 }
 
+// Whether filling in from this template takes anything from the chosen item.
 function usesCatalog(profile) {
-  return profile.fields.some((field) => field.source);
+  return Boolean(profile.media) || profile.fields.some((field) => field.source);
+}
+
+async function setMedia(profile, on) {
+  profile.media = on;
+  await save();
+  render();
 }
 
 function renderEditor(site) {
@@ -764,6 +790,11 @@ function renderEditor(site) {
   }
 
   if (usesCatalog(profile) && items.length) app.append(itemSelect());
+  if (items.length) {
+    const box = el('input', { type: 'checkbox', checked: Boolean(profile.media) });
+    box.addEventListener('change', () => setMedia(profile, box.checked));
+    app.append(el('label', { className: 'check' }, box, "Also add the item's photos and videos to the page"));
+  }
   // The everyday action goes above the boxes, where it's seen without scrolling.
   app.append(
     el(

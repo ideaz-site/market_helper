@@ -77,6 +77,81 @@ async function deleteMedia(id) {
   mediaUrls.delete(id);
 }
 
+// Runs in the page, so it can't use anything outside itself. Files can't be
+// handed to a page whole, so they arrive as base64 pieces ('piece'), and 'attach'
+// then puts them into the page's own file choosers, as if the user had picked them.
+function uploadInPage(step, piece) {
+  const store = (window.__marketHelperFiles = window.__marketHelperFiles || []);
+  if (step === 'begin') {
+    store.length = 0;
+    return null;
+  }
+  if (step === 'piece') {
+    const file = (store[piece.index] = store[piece.index] || { name: piece.name, type: piece.type, parts: [] });
+    file.parts.push(Uint8Array.from(atob(piece.data), (char) => char.charCodeAt(0)));
+    return null;
+  }
+
+  const files = store.map((file) => new File(file.parts, file.name, { type: file.type }));
+  store.length = 0;
+  const accepts = (input, file) => {
+    const rules = input.accept.split(',').map((rule) => rule.trim().toLowerCase()).filter(Boolean);
+    if (!rules.length) return true;
+    return rules.some((rule) =>
+      rule.startsWith('.')
+        ? file.name.toLowerCase().endsWith(rule)
+        : rule.endsWith('/*')
+          ? file.type.startsWith(rule.slice(0, -1))
+          : file.type === rule,
+    );
+  };
+  // File choosers are usually hidden behind a button, so hidden ones count.
+  const inputs = [...document.querySelectorAll('input[type="file"]')].filter((input) => !input.disabled);
+  const chosen = new Map(); // file chooser -> files for it
+  for (const file of files) {
+    const input = inputs.find((candidate) => {
+      if (!accepts(candidate, file)) return false;
+      return candidate.multiple || !chosen.has(candidate);
+    });
+    if (input) chosen.set(input, [...(chosen.get(input) || []), file]);
+  }
+  let added = 0;
+  for (const [input, batch] of chosen) {
+    const transfer = new DataTransfer();
+    for (const file of batch) transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    added += batch.length;
+  }
+  return { added, wanted: files.length };
+}
+
+function toBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+// Adds an item's photos and videos to the page in the tab. Resolves to
+// { added, wanted }: how many the page had a place for, out of how many there are.
+async function uploadMedia(tabId, item) {
+  const PIECE = 3 * 1024 * 1024; // a multiple of 3, so each piece is whole base64
+  await runInPage(tabId, uploadInPage, ['begin']);
+  let index = 0;
+  for (const media of item.media) {
+    const file = await settled((await mediaStore('readonly')).get(media.id));
+    if (!file) continue;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    for (let start = 0; start < bytes.length || start === 0; start += PIECE) {
+      const data = toBase64(bytes.subarray(start, start + PIECE));
+      await runInPage(tabId, uploadInPage, ['piece', { index, name: media.name, type: file.type, data }]);
+    }
+    index++;
+  }
+  return runInPage(tabId, uploadInPage, ['attach']);
+}
+
 function blankItem() {
   return {
     id: crypto.randomUUID(),

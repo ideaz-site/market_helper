@@ -32,7 +32,7 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
     Each website can have several templates, each with its own boxes and text. Keep one per kind of listing, per message you send, or per form you fill in. Switch between them or fill in from any of them in the "All my websites" list, and drag them into the order you like.
 
     MY ITEMS
-    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place. Tell a box to use the item's title, price, quantity, condition or description, then choose an item and fill its details into the form.
+    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place. Tell a box to use the item's title, price, quantity, condition or description, then choose an item and fill its details into the form. It can add the item's photos and videos to the page for you as well.
 
     GOOD FOR
     - Reposting marketplace and classified listings
@@ -76,7 +76,7 @@ The screenshots show the real panel with sample data beside a made-up listing pa
 
 `scripting`
 
-    Injects a script into the current page only when the user presses "Choose a box on the page" (to highlight text fields and record the one they click) or "Fill in" (to put their saved text into the saved field). It also checks whether saved fields exist on a site the user has saved.
+    Injects a script into the current page only when the user presses "Choose a box on the page" (to highlight text fields and record the one they click) or "Fill in" (to put their saved text into the saved field and, if they turned that option on, their chosen item's photos and videos into the page's file chooser). It also checks whether saved fields exist on a site the user has saved.
 
 `sidePanel`
 
