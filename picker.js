@@ -136,11 +136,19 @@
     return `html > ${parts.join(' > ')}`;
   }
 
+  // A label's text without what's typed in the box it wraps.
+  function labelText(el) {
+    if (!el.labels || !el.labels[0]) return '';
+    const copy = el.labels[0].cloneNode(true);
+    for (const control of copy.querySelectorAll('input, textarea, select, [contenteditable]')) control.remove();
+    return copy.textContent;
+  }
+
   function describe(el) {
     const label =
       el.getAttribute('aria-label') ||
       el.getAttribute('placeholder') ||
-      (el.labels && el.labels[0] && el.labels[0].textContent) ||
+      labelText(el) ||
       el.getAttribute('name') ||
       el.tagName.toLowerCase();
     return label.trim().replace(/\s+/g, ' ').slice(0, 60);

@@ -106,11 +106,18 @@ function inPage(action, fields, text) {
     'textarea,input:not([type]),input[type="text"],input[type="search"],input[type="email"],input[type="url"],' +
     'input[type="tel"],input[type="number"],[contenteditable=""],[contenteditable="true"],' +
     '[contenteditable="plaintext-only"],[role="textbox"]';
+  // A label's text without what's typed in the box it wraps.
+  const labelText = (el) => {
+    if (!el.labels || !el.labels[0]) return '';
+    const copy = el.labels[0].cloneNode(true);
+    for (const control of copy.querySelectorAll('input, textarea, select, [contenteditable]')) control.remove();
+    return copy.textContent;
+  };
   const describe = (el) =>
     (
       el.getAttribute('aria-label') ||
       el.getAttribute('placeholder') ||
-      (el.labels && el.labels[0] && el.labels[0].textContent) ||
+      labelText(el) ||
       el.getAttribute('name') ||
       el.tagName.toLowerCase()
     )
