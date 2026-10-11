@@ -10,7 +10,7 @@ const statusEl = document.getElementById('status');
 //           profiles: { id -> { id, name, fields, media } } }
 // media: filling in the page also adds the chosen item's photos and videos.
 // A field is { id, selector, label, text, source }: source names the catalog
-// item detail it pastes (see ITEM_SOURCES); without one it pastes its own text.
+// item detail it pastes (see itemSources in catalog.js); without one it pastes its own text.
 let sites = {};
 let view = 'sites'; // 'sites' | 'catalog' (catalog.js)
 let dragging = null; // { host, id } of the profile row being dragged
@@ -228,7 +228,7 @@ async function pasteField(tabId, field) {
   if (field.source) {
     const item = activeItem();
     if (!item) return 'noitem';
-    text = item[field.source];
+    text = sourceValue(item, field.source);
   } else if (field.text) {
     text = field.text;
   } else {
@@ -247,7 +247,7 @@ async function pasteOne(field) {
       clipboard: `Filled in "${field.label}" with what you last copied`,
       missing: `The "${field.label}" box isn't on this page`,
       empty: field.source
-        ? `The chosen item has no ${ITEM_SOURCES[field.source].toLowerCase()} yet`
+        ? `The chosen item has no ${sourceName(field.source) || 'value for that'} yet`
         : `Nothing to fill in for "${field.label}". Type some text first.`,
       noitem: 'Add an item under My items first',
     };
@@ -700,8 +700,9 @@ function renderField(profile, field, onPage) {
   // Choosing a source only means something once there are items to take it from.
   if (items.length || field.source) {
     const source = el('select', {}, el('option', { value: '' }, 'Text I type here'));
-    for (const [key, label] of Object.entries(ITEM_SOURCES)) {
-      source.append(el('option', { value: key }, `The item's ${label.toLowerCase()}`));
+    for (const [key, name] of itemSources()) source.append(el('option', { value: key }, `The item's ${name}`));
+    if (field.source && !sourceName(field.source)) {
+      source.append(el('option', { value: field.source, disabled: true }, 'A detail that was removed'));
     }
     source.value = field.source || '';
     source.addEventListener('change', async () => {
@@ -714,16 +715,12 @@ function renderField(profile, field, onPage) {
 
   if (field.source) {
     const item = activeItem();
-    const detail = ITEM_SOURCES[field.source].toLowerCase();
-    card.append(
-      el(
-        'p',
-        { className: item && item[field.source] ? 'preview' : 'preview muted' },
-        item
-          ? item[field.source] || `"${itemName(item)}" has no ${detail} yet. Add one under My items.`
-          : 'Add an item under My items first.',
-      ),
-    );
+    const detail = sourceName(field.source);
+    const value = item && detail ? sourceValue(item, field.source) : '';
+    let note = 'Add an item under My items first.';
+    if (!detail) note = 'That detail was removed. Choose something else above.';
+    else if (item) note = `"${itemName(item)}" has no ${detail} yet. Add one under My items.`;
+    card.append(el('p', { className: value ? 'preview' : 'preview muted' }, value || note));
   } else {
     const text = el('textarea', {
       value: field.text,

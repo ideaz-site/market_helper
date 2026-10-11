@@ -32,7 +32,7 @@ Upload `market_helper-store-v0.1.0.zip` from the GitHub release. It has `manifes
     Each website can have several templates, each with its own boxes and text. Keep one per kind of listing, per message you send, or per form you fill in. Switch between them or fill in from any of them in the "All my websites" list, and drag them into the order you like.
 
     MY ITEMS
-    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, all in one place. Tell a box to use the item's title, price, quantity, condition or description, then choose an item and fill its details into the form. It can add the item's photos and videos to the page for you as well.
+    Keep a list of the items you sell, each with a title, price, quantity, condition, description, photos and videos, plus any details of your own such as brand or size, all in one place. Tell a box to use the item's title, price, quantity, condition or description, then choose an item and fill its details into the form. It can add the item's photos and videos to the page for you as well.
 
     GOOD FOR
     - Reposting marketplace and classified listings

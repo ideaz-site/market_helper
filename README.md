@@ -18,7 +18,7 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 
 Messages about what just happened appear in a bar pinned to the bottom of the panel.
 
-Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition or description). Item details come from the item chosen under **Fill in using this item**, so one template can fill a listing form for any of your items.
+Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition, description, or any detail you added yourself). Item details come from the item chosen under **Fill in using this item**, so one template can fill a listing form for any of your items.
 
 Tick **Also add the item's photos and videos to the page** and **Fill in the page** also hands the chosen item's photos and videos to the page's own file chooser, as if you had picked the files yourself; the website then uploads them. Photos go to a chooser that takes images and videos to one that takes video. The part of the page where photos are added has to be open. Pressing Fill in the page twice adds them twice.
 
@@ -45,6 +45,8 @@ The Web Store package is built by `store/build-zip.sh`, which leaves out the hel
 
 The **My items** tab keeps a list of the items you sell. Each item has a title, price, quantity, condition, description, and any number of photos and videos. Changes save as you type.
 
+Under **More details** you can add your own details, such as Brand or Size, as text or a number. A detail you add appears on every item, and in each box's **Fill this box with** choice alongside the built-in ones. Removing a detail removes it from every item.
+
 Each photo and video is labelled **Photo** or **Video**, and videos also show a play symbol. Drag one to reorder, or press **Make main** under it to move it to the front; the first is the item's thumbnail in the list.
 
 ### Spreadsheets and Google Sheets
@@ -55,6 +57,7 @@ To edit in Google Sheets: save to a file, then in Sheets use File → Import →
 
 - Keep the `id` column. A row with an `id` updates that item and keeps its photos and videos; a row without one becomes a new item.
 - Items that aren't in the file are left as they are. Loading a file never deletes.
+- Details you added yourself are columns too, named as you named them. A column whose name matches no detail is ignored.
 - Only the columns in the file are changed. The `media` column lists file names for reference and is ignored when loading.
 - `condition` must be one of New, Like new, Good, Fair, For parts; anything else is ignored.
 

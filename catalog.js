@@ -3,12 +3,16 @@
 // chrome.storage.local; photos and videos are too big for that and go in IndexedDB.
 const ITEMS_KEY = 'items';
 const ACTIVE_ITEM_KEY = 'activeItem';
+const ITEM_FIELDS_KEY = 'itemFields';
 const CONDITIONS = ['New', 'Like new', 'Good', 'Fair', 'For parts'];
 // Item details a saved page field can take its text from.
 const ITEM_SOURCES = { title: 'Title', price: 'Price', quantity: 'Quantity', condition: 'Condition', description: 'Description' };
 
-// { id, title, price, quantity, condition, description, media: [{ id, kind, name }] }
+// { id, title, price, quantity, condition, description, custom: { detail id -> value },
+//   media: [{ id, kind, name }] }
 let items = [];
+// The user's own details, shared by every item: [{ id, name, type: 'text' | 'number' }]
+let itemFields = [];
 let editingItemId = null;
 let activeItemId = null; // the item that catalog-linked fields paste from
 let mediaDb = null;
@@ -20,9 +24,68 @@ function saveItems() {
 }
 
 async function loadItems() {
-  const stored = await chrome.storage.local.get([ITEMS_KEY, ACTIVE_ITEM_KEY]);
+  const stored = await chrome.storage.local.get([ITEMS_KEY, ACTIVE_ITEM_KEY, ITEM_FIELDS_KEY]);
   items = stored[ITEMS_KEY] || [];
+  itemFields = stored[ITEM_FIELDS_KEY] || [];
   activeItemId = stored[ACTIVE_ITEM_KEY] || null;
+}
+
+// A page box's source is a built-in detail's key, or "custom:" and the id of one
+// of the user's own.
+const CUSTOM = 'custom:';
+
+function customField(source) {
+  return source.startsWith(CUSTOM) ? itemFields.find((field) => field.id === source.slice(CUSTOM.length)) : null;
+}
+
+// Every detail a page box can be filled from, as [source, name].
+function itemSources() {
+  return [
+    ...Object.entries(ITEM_SOURCES).map(([key, label]) => [key, label.toLowerCase()]),
+    ...itemFields.map((field) => [CUSTOM + field.id, field.name]),
+  ];
+}
+
+// The name of a source, or null when it's a detail that has since been removed.
+function sourceName(source) {
+  const match = itemSources().find(([key]) => key === source);
+  return match ? match[1] : null;
+}
+
+function sourceValue(item, source) {
+  const field = customField(source);
+  if (field) return (item.custom && item.custom[field.id]) || '';
+  return source in ITEM_SOURCES ? item[source] : '';
+}
+
+function saveItemFields() {
+  return chrome.storage.local.set({ [ITEM_FIELDS_KEY]: itemFields });
+}
+
+// Names the built-in details and spreadsheet columns already use.
+const RESERVED_NAMES = ['id', 'media', 'title', 'price', 'quantity', 'condition', 'description'];
+
+async function addItemField(name, type) {
+  if (!name) return false;
+  const taken = [...RESERVED_NAMES, ...itemFields.map((field) => field.name.toLowerCase())];
+  if (taken.includes(name.toLowerCase())) {
+    setStatus(`There's already a detail called "${name}".`, 'error');
+    return false;
+  }
+  itemFields.push({ id: crypto.randomUUID(), name, type });
+  await saveItemFields();
+  render();
+  return true;
+}
+
+// Takes the detail, and what every item has for it, away.
+async function removeItemField(field) {
+  itemFields = itemFields.filter((other) => other !== field);
+  for (const item of items) if (item.custom) delete item.custom[field.id];
+  await saveItemFields();
+  await saveItems();
+  pendingRemove = null;
+  render();
 }
 
 function itemName(item) {
@@ -160,6 +223,7 @@ function blankItem() {
     quantity: '1',
     condition: CONDITIONS[0],
     description: '',
+    custom: {},
     media: [],
   };
 }
@@ -218,8 +282,12 @@ function parseCsv(text) {
 
 function exportCsv() {
   const rows = [
-    [...CSV_COLUMNS, 'media'],
-    ...items.map((item) => [...CSV_COLUMNS.map((key) => item[key]), item.media.map((m) => m.name).join('; ')]),
+    [...CSV_COLUMNS, ...itemFields.map((field) => field.name), 'media'],
+    ...items.map((item) => [
+      ...CSV_COLUMNS.map((key) => item[key]),
+      ...itemFields.map((field) => sourceValue(item, CUSTOM + field.id)),
+      item.media.map((m) => m.name).join('; '),
+    ]),
   ];
   // The BOM makes Excel read the file as UTF-8.
   const url = URL.createObjectURL(new Blob(['﻿' + toCsv(rows)], { type: 'text/csv' }));
@@ -234,7 +302,9 @@ async function importCsv(file) {
   const rows = parseCsv((await file.text()).replace(/^﻿/, ''));
   const header = (rows.shift() || []).map((name) => name.trim().toLowerCase());
   const columns = CSV_COLUMNS.filter((key) => header.includes(key));
-  if (!columns.some((key) => key !== 'id')) {
+  // The user's own details are columns too, under the names they gave them.
+  const extras = itemFields.filter((field) => header.includes(field.name.toLowerCase()));
+  if (!columns.some((key) => key !== 'id') && !extras.length) {
     return setStatus(
       "That file doesn't look like a Market Helper spreadsheet. It needs columns named title, price, quantity, condition or description.",
       'error',
@@ -245,7 +315,10 @@ async function importCsv(file) {
   let updated = 0;
   for (const row of rows) {
     const values = Object.fromEntries(columns.map((key) => [key, (row[header.indexOf(key)] ?? '').trim()]));
-    if (!columns.some((key) => key !== 'id' && values[key])) continue;
+    const custom = Object.fromEntries(
+      extras.map((field) => [field.id, (row[header.indexOf(field.name.toLowerCase())] ?? '').trim()]),
+    );
+    if (!columns.some((key) => key !== 'id' && values[key]) && !Object.values(custom).some(Boolean)) continue;
     if ('condition' in values) {
       const known = CONDITIONS.find((name) => name.toLowerCase() === values.condition.toLowerCase());
       if (known) values.condition = known;
@@ -261,6 +334,7 @@ async function importCsv(file) {
       added++;
     }
     Object.assign(item, values);
+    item.custom = { ...item.custom, ...custom };
   }
   await saveItems();
   render();
@@ -495,6 +569,44 @@ function itemField(item, key, label, control) {
   return el('label', { className: 'field' }, el('span', {}, label), control);
 }
 
+// The user's own details for an item, and the form that adds another.
+function renderItemDetails(item) {
+  const section = el(
+    'div',
+    { className: 'stack' },
+    el('p', { className: 'hint' }, 'Add your own details, such as Brand or Size. Every item gets them, and boxes on a page can be filled in from them.'),
+  );
+  for (const field of itemFields) {
+    const control = el('input', field.type === 'number' ? { type: 'number', step: 'any' } : {});
+    control.value = sourceValue(item, CUSTOM + field.id);
+    control.addEventListener('input', () => {
+      item.custom = { ...item.custom, [field.id]: control.value };
+      saveItems();
+    });
+    section.append(
+      el(
+        'div',
+        { className: 'row detail' },
+        el('label', { className: 'field grow' }, el('span', {}, field.name), control),
+        ...removeControls(`detail:${field.id}`, () => removeItemField(field), {
+          icon: true,
+          label: `Remove ${field.name}`,
+          question: `Remove "${field.name}" from every item?`,
+        }),
+      ),
+    );
+  }
+
+  const name = el('input', { className: 'grow', placeholder: 'New detail name', ariaLabel: 'Name of the new detail' });
+  const type = el('select', { ariaLabel: 'Kind of detail' }, el('option', { value: 'text' }, 'Text'), el('option', { value: 'number' }, 'Number'));
+  const add = () => addItemField(name.value.trim(), type.value);
+  name.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') add();
+  });
+  section.append(el('div', { className: 'row add' }, name, type, el('button', { onclick: add }, 'Add')));
+  return section;
+}
+
 function renderItemEditor(item) {
   const condition = el('select');
   for (const name of CONDITIONS) condition.append(el('option', { value: name }, name));
@@ -529,6 +641,8 @@ function renderItemEditor(item) {
         el('textarea', { className: 'tall', placeholder: 'Describe it: size, age, condition, anything a buyer should know' }),
       ),
     ),
+    el('h2', {}, 'More details'),
+    renderItemDetails(item),
     el('h2', {}, 'Photos and videos'),
   );
   app.append(

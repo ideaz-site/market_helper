@@ -308,6 +308,15 @@ textarea {
   margin-bottom: 10px;
 }
 
+.row.detail {
+  align-items: flex-end;
+}
+
+.row.add select {
+  flex: none;
+  width: auto;
+}
+
 .columns {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
