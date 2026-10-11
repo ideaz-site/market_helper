@@ -12,7 +12,7 @@ A Chrome extension that saves sites, remembers their text fields, and pastes tex
 Clicking the extension opens it in Chrome's side panel, which stays open while you use the page. The panel uses everyday words; the code calls a "box" a field and a "template" a profile.
 
 1. On a website, click the extension and press **Save this website**.
-2. Press **Choose a box on the page**. Every text box that isn't saved yet gets a purple overlay that turns green on hover; click one to save it. **Stop** in the banner, or Esc, cancels.
+2. Press **Choose a box on the page**. Every text box that isn't saved yet gets a purple overlay that turns green on hover; click one to save it. **Stop** in the banner, or Esc, cancels. So does doing anything else in the panel, switching tabs, or closing the panel.
 3. Type what should go in that box, then press **Fill in** beside it, or **Fill in the page** for all of them.
    A box with no text is filled with whatever you last copied.
 

@@ -271,10 +271,21 @@ async function pasteProfile(site, profile) {
   }
 }
 
+const PICK_HINT = 'Now click one of the purple boxes on the page. Press Stop or Esc to finish.';
+let pickerPort = null; // open while picker.js is choosing a box on a page
+
+// Ends choosing a box on the page; picker.js stops when its port closes.
+function stopPicking() {
+  if (!pickerPort) return;
+  pickerPort.disconnect();
+  pickerPort = null;
+  if (statusEl.textContent === PICK_HINT) setStatus('');
+}
+
 async function startPicking() {
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['picker.js'] });
-    setStatus('Now click one of the purple boxes on the page. Press Stop or Esc to finish.');
+    setStatus(PICK_HINT);
   } catch (error) {
     setStatus(`Chrome doesn't let Market Helper work on this page. Try an ordinary website. (${error.message})`, 'error');
   }
@@ -734,6 +745,7 @@ function renderEditor(site) {
 
   app.append(el('h2', {}, 'Boxes to fill in'));
   const pick = el('button', { disabled: !onPage, onclick: startPicking }, 'Choose a box on the page');
+  pick.dataset.picks = '';
   if (!profile.fields.length) {
     pick.className = 'primary big';
     app.append(
@@ -932,10 +944,28 @@ async function init() {
   showUpdateNote();
   setInterval(watchPage, 2000);
 
-  chrome.tabs.onActivated.addListener(onTabChange);
+  chrome.tabs.onActivated.addListener(() => {
+    stopPicking();
+    onTabChange();
+  });
   chrome.tabs.onUpdated.addListener((tabId, change) => {
     if (tab && tabId === tab.id && (change.url || change.status === 'complete')) onTabChange();
   });
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== 'picker') return;
+    pickerPort = port;
+    port.onDisconnect.addListener(() => {
+      if (pickerPort === port) pickerPort = null;
+    });
+  });
+  // Doing anything else in the panel means the user has moved on from choosing a box.
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (!event.target.closest('[data-picks]')) stopPicking();
+    },
+    true,
+  );
   chrome.runtime.onMessage.addListener((message) => {
     if (message && message.type === 'field-picked') onFieldPicked(message.label);
     if (message && message.type === 'picking-stopped') setStatus('');

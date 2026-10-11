@@ -162,8 +162,18 @@
 
   let timer = null;
 
+  // The panel holds the other end. It lets go when the user does something else
+  // there, switches tab or closes it, and choosing ends with it.
+  const port = chrome.runtime.connect({ name: 'picker' });
+  port.onDisconnect.addListener(() => {
+    if (!window.__marketHelperPicking) return;
+    stop();
+    banner.remove();
+  });
+
   function stop() {
     window.__marketHelperPicking = false;
+    port.disconnect();
     clearInterval(timer);
     layer.remove();
     document.removeEventListener('mouseover', onOver, true);
