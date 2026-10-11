@@ -97,21 +97,27 @@ function setStatus(message, kind = '') {
   drawStatus();
 }
 
-// The bar carries its own way to put it away, or to end choosing boxes.
+// The bar carries its own way to put it away, or to end choosing boxes. The
+// message sits in a live region of its own, so a screen reader announces the
+// message and not the button beside it.
+const statusMessage = el('span', { className: 'message', role: 'status', ariaLive: 'polite' });
+const statusAction = el('span', { className: 'action' });
+statusEl.append(statusMessage, statusAction);
+
 function drawStatus() {
   statusEl.className = statusKind;
   statusEl.hidden = !statusText;
-  if (!statusText) return statusEl.replaceChildren();
   const mark = { ok: '✓ ', error: '⚠ ' }[statusKind] || '';
-  const parts = [el('span', { className: 'message' }, mark + statusText)];
+  const message = statusText && mark + statusText;
+  if (statusMessage.textContent !== message) statusMessage.textContent = message;
+  if (!statusText || statusKind === 'busy') return statusAction.replaceChildren();
   if (pickerPort) {
     const done = el('button', { className: 'primary', onclick: () => finishPicking(true) }, 'Done choosing');
     done.dataset.picks = '';
-    parts.push(done);
-  } else if (statusKind !== 'busy') {
-    parts.push(el('button', { onclick: () => setStatus('') }, 'OK'));
+    statusAction.replaceChildren(done);
+  } else {
+    statusAction.replaceChildren(el('button', { onclick: () => setStatus('') }, 'OK'));
   }
-  statusEl.replaceChildren(...parts);
 }
 
 // key names the node so render() can give it back the focus it had.
@@ -775,21 +781,18 @@ function renderSiteCard(site, here) {
         icon(open ? 'collapse' : 'expand'),
         el('strong', {}, site.host),
       );
-  const card = el(
-    'div',
-    { className: 'card' },
-    el(
-      'div',
-      { className: 'row' },
-      head,
-      el('button', { key: `open:${site.host}`, onclick: () => edit(site.host) }, 'Open'),
-      ...removeControls(`site:${site.host}`, () => removeSite(site.host), {
-        icon: true,
-        label: `Remove ${site.host}`,
-        question: `Remove ${site.host} and its ${count === 1 ? 'template' : `${count} templates`}?`,
-      }),
-    ),
-  );
+  const key = `site:${site.host}`;
+  const remove = removeControls(key, () => removeSite(site.host), {
+    icon: true,
+    label: `Remove ${site.host}`,
+    question: `Remove ${site.host} and its ${count === 1 ? 'template' : `${count} templates`}?`,
+  });
+  // Open and the bin stay together, so large text moves them down as a pair.
+  const actions =
+    pendingRemove === key
+      ? remove
+      : [el('div', { className: 'row actions' }, el('button', { key: `open:${site.host}`, onclick: () => edit(site.host) }, 'Open'), ...remove)];
+  const card = el('div', { className: 'card' }, el('div', { className: 'row' }, head, ...actions));
   if (open) card.append(...profilesOf(site).map((profile) => renderProfileRow(site, profile)));
   return card;
 }
@@ -1253,6 +1256,41 @@ function renderHeader() {
 }
 
 // Version and updates are maintenance, so they sit out of the way at the bottom.
+const TEXT_SIZE_KEY = 'textSize';
+const TEXT_SIZES = { Normal: '100%', Large: '112.5%', Largest: '125%' };
+let textSize = 'Normal';
+
+// Everything in the panel is sized in rem, so this scales all of it.
+function applyTextSize() {
+  document.documentElement.style.fontSize = TEXT_SIZES[textSize] || TEXT_SIZES.Normal;
+}
+
+async function setTextSize(size) {
+  textSize = size;
+  applyTextSize();
+  await chrome.storage.local.set({ [TEXT_SIZE_KEY]: size });
+  render();
+}
+
+function renderTextSize() {
+  return el(
+    'div',
+    { className: 'textsize', role: 'group', ariaLabel: 'Text size' },
+    el('span', {}, 'Text size'),
+    el(
+      'div',
+      { className: 'row equal' },
+      ...Object.keys(TEXT_SIZES).map((size) =>
+        el(
+          'button',
+          { key: `size:${size}`, ariaPressed: String(size === textSize), onclick: () => setTextSize(size) },
+          size,
+        ),
+      ),
+    ),
+  );
+}
+
 function renderFooter() {
   return el(
     'p',
@@ -1287,7 +1325,7 @@ function render() {
   if (view === 'catalog') renderCatalog();
   else if (site) renderEditor(site);
   else renderList();
-  app.append(renderFooter());
+  app.append(renderTextSize(), renderFooter());
   drawStatus();
 
   scrollTo(0, top);
@@ -1360,6 +1398,8 @@ function onFieldUnpicked({ id }) {
 }
 
 async function init() {
+  textSize = (await chrome.storage.local.get(TEXT_SIZE_KEY))[TEXT_SIZE_KEY] || 'Normal';
+  applyTextSize();
   await readTab();
   await loadSites();
   await loadItems();

@@ -1,22 +1,27 @@
-/* One palette for the whole panel. --line separates things; controls use
-   --line-strong, which is dark enough to see where a control ends. */
+/* One palette for the whole panel. Every text colour is at least 7:1 against
+   every background it sits on, in both themes. --line separates things;
+   controls use --line-strong, which is dark enough to see where a control ends.
+   Sizes are in rem, so they follow the browser's font size and the panel's own
+   Text size setting. */
 :root {
   color-scheme: light dark;
   --bg: light-dark(#f6f5f9, #16141a);
   --surface: light-dark(#ffffff, #221f29);
   --surface-2: light-dark(#eeecf3, #2c2835);
   --line: light-dark(#dcd8e3, #3a3544);
-  --line-strong: light-dark(#8f899c, #7a738a);
+  --line-strong: light-dark(#77718a, #958ea8);
   --text: light-dark(#1c1a21, #f1eef6);
-  --text-2: light-dark(#5c566a, #b3acc2);
-  --accent: #7c3aed;
+  --text-2: light-dark(#464052, #c9c2d6);
+  --accent: #6d28d9;
+  --accent-edge: light-dark(#6d28d9, #a78bfa);
   --accent-soft: light-dark(#ede9fe, #33265c);
   --accent-text: light-dark(#5b21b6, #d4c8ff);
-  --ok: light-dark(#166534, #86efac);
+  --ok: light-dark(#14532d, #86efac);
   --ok-soft: light-dark(#ecfdf3, #11281b);
-  --danger: light-dark(#b91c1c, #fca5a5);
+  --danger: light-dark(#991b1b, #fca5a5);
   --danger-soft: light-dark(#fef2f2, #2e1416);
-  --danger-fill: #b91c1c;
+  --danger-fill: #991b1b;
+  --danger-edge: light-dark(#991b1b, #f87171);
 }
 
 * {
@@ -28,23 +33,23 @@ body {
   padding: 12px;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.45 system-ui, sans-serif;
+  font: 1rem/1.5 system-ui, sans-serif;
 }
 
 h1 {
   margin: 0 0 10px;
-  font-size: 17px;
+  font-size: 1.1875rem;
 }
 
 h2 {
   margin: 20px 0 8px;
-  font-size: 15px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
 h2.name {
   margin-top: 12px;
-  font-size: 17px;
+  font-size: 1.1875rem;
   overflow-wrap: anywhere;
 }
 
@@ -55,7 +60,7 @@ p {
 /* Buttons: outline by default; primary for the one thing the screen is for;
    danger to confirm a removal; link for small side actions. */
 button {
-  min-height: 36px;
+  min-height: 2.75rem;
   padding: 6px 12px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -78,7 +83,7 @@ button[aria-disabled='true'] {
 }
 
 button.primary {
-  border-color: var(--accent);
+  border-color: var(--accent-edge);
   background: var(--accent);
   color: #fff;
   font-weight: 600;
@@ -96,7 +101,7 @@ button.primary[aria-disabled='true'] {
 }
 
 button.danger {
-  border-color: var(--danger-fill);
+  border-color: var(--danger-edge);
   background: var(--danger-fill);
   color: #fff;
 }
@@ -107,13 +112,13 @@ button.warn {
 }
 
 button.big {
-  min-height: 48px;
-  font-size: 16px;
+  min-height: 3.25rem;
+  font-size: 1.0625rem;
   font-weight: 700;
 }
 
 button.dashed {
-  min-height: 44px;
+  min-height: 2.75rem;
   border: 1.5px dashed var(--accent-text);
   background: transparent;
   color: var(--accent-text);
@@ -125,14 +130,14 @@ button.icon {
   flex: none;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
+  min-width: 2.75rem;
   padding: 0;
 }
 
 svg {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 1.375rem;
+  height: 1.375rem;
 }
 
 button.back {
@@ -160,11 +165,16 @@ summary:focus-visible {
   outline-offset: 1px;
 }
 
+::placeholder {
+  color: var(--text-2);
+  opacity: 1;
+}
+
 input,
 select,
 textarea {
   width: 100%;
-  min-height: 40px;
+  min-height: 2.75rem;
   padding: 7px 9px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -175,21 +185,21 @@ textarea {
 
 input[type='checkbox'] {
   flex: none;
-  width: 22px;
+  width: 1.5rem;
   min-height: 0;
-  height: 22px;
+  height: 1.5rem;
   margin: 0;
   padding: 0;
   accent-color: var(--accent);
 }
 
 textarea {
-  min-height: 64px;
+  min-height: 4.5rem;
   resize: vertical;
 }
 
 textarea.tall {
-  min-height: 110px;
+  min-height: 7rem;
 }
 
 .row {
@@ -207,8 +217,14 @@ textarea.tall {
   flex-wrap: wrap;
 }
 
+/* Equal buttons side by side, dropping onto separate lines when the text is
+   too large for them to fit. */
+.row.equal {
+  flex-wrap: wrap;
+}
+
 .row.equal > * {
-  flex: 1;
+  flex: 1 1 7rem;
 }
 
 .row.end {
@@ -224,7 +240,7 @@ textarea.tall {
 
 .columns {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -234,7 +250,7 @@ textarea.tall {
 }
 
 .field > span {
-  font-size: 14px;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
@@ -244,7 +260,7 @@ textarea.tall {
 }
 
 .hint {
-  font-size: 14px;
+  font-size: 0.9375rem;
 }
 
 .warn-text {
@@ -265,10 +281,11 @@ textarea.tall {
 .pill {
   display: inline-block;
   padding: 1px 8px;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-text);
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -284,7 +301,7 @@ textarea.tall {
 
 .tabs button {
   flex: 1;
-  min-height: 40px;
+  min-height: 2.75rem;
   border: 2px solid transparent;
   background: none;
   color: var(--text-2);
@@ -310,6 +327,25 @@ textarea.tall {
   padding: 8px;
 }
 
+/* A long website name takes a line to itself before it is broken mid-word. */
+.card > .row:first-child {
+  flex-wrap: wrap;
+}
+
+.card > .row:first-child > .grow {
+  flex: 1 1 9rem;
+  overflow-wrap: break-word;
+}
+
+.card > .row:first-child strong {
+  overflow-wrap: break-word;
+}
+
+.actions {
+  flex: none;
+  margin-left: auto;
+}
+
 .card > * + * {
   border-top: 1px solid var(--line);
 }
@@ -320,7 +356,7 @@ textarea.tall {
 
 .host {
   display: block;
-  font-size: 16px;
+  font-size: 1.0625rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -330,6 +366,7 @@ textarea.tall {
   display: grid;
   gap: 6px;
   padding: 12px;
+  border: 1px solid transparent;
   border-radius: 12px;
   background: var(--accent-soft);
 }
@@ -350,7 +387,7 @@ button.toggle {
 }
 
 .profile {
-  min-height: 52px;
+  min-height: 3.5rem;
 }
 
 .profile.dragging {
@@ -369,7 +406,7 @@ button.grip {
   display: inline-flex;
   flex: none;
   align-items: center;
-  min-width: 28px;
+  min-width: 2.25rem;
   padding: 0;
   border-color: transparent;
   background: none;
@@ -397,7 +434,7 @@ button.tname {
 
 .meta {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 0.875rem;
 }
 
 /* A remove question drops onto its own line under the row it belongs to. */
@@ -426,7 +463,7 @@ button.tname {
 
 .confirm .detail {
   flex: 1 0 100%;
-  font-size: 14px;
+  font-size: 0.9375rem;
 }
 
 .notice {
@@ -500,7 +537,7 @@ button.box-head {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 56px;
+  min-height: 3.75rem;
   padding: 8px 10px 8px 12px;
   border: 0;
   border-radius: 0;
@@ -532,7 +569,7 @@ button.box-head:focus-visible,
   display: block;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 0.875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -552,15 +589,18 @@ button.box-head:focus-visible,
   margin: 0;
 }
 
+/* On the page: a filled green dot. Not on it: an empty ring. The shape tells
+   them apart as well as the colour. */
 .dot {
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid var(--line-strong);
   border-radius: 50%;
-  background: var(--line-strong);
 }
 
 .dot.found {
+  border-color: var(--ok);
   background: var(--ok);
 }
 
@@ -568,12 +608,13 @@ button.box-head:focus-visible,
 .dot.alert {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  margin: 0 -4px;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0 -0.25rem;
+  border: 0;
   background: var(--danger);
   color: var(--surface);
-  font-size: 13px;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -604,7 +645,7 @@ button.box-head:focus-visible,
 .more summary {
   display: flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 2.75rem;
   color: var(--text-2);
   cursor: pointer;
 }
@@ -618,15 +659,35 @@ button.box-head:focus-visible,
   content: '▾';
 }
 
+.textsize {
+  display: grid;
+  gap: 6px;
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.textsize > span {
+  color: var(--text-2);
+}
+
+.textsize .row.equal > * {
+  flex: 1 1 5rem;
+  padding: 6px 4px;
+}
+
+.textsize button[aria-pressed='true'] {
+  border: 2px solid var(--accent-text);
+  font-weight: 700;
+}
+
 .footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 24px 0 0;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+  margin: 4px 0 0;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 0.875rem;
 }
 
 /* My items */
@@ -651,7 +712,7 @@ button.box-head:focus-visible,
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 64px;
+  min-height: 4.5rem;
   padding: 8px 6px 8px 10px;
   border: 0;
   border-radius: 0;
@@ -670,9 +731,10 @@ button.box-head:focus-visible,
 
 .item .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 2px 8px;
+  font-size: 0.9375rem;
 }
 
 .item .meta > span:first-child {
@@ -687,8 +749,8 @@ button.box-head:focus-visible,
 
 .thumb {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 3rem;
+  height: 3rem;
   border-radius: 8px;
   background: var(--surface-2);
   object-fit: cover;
@@ -699,7 +761,7 @@ button.box-head:focus-visible,
   place-items: center;
   background: var(--accent-soft);
   color: var(--accent-text);
-  font-size: 18px;
+  font-size: 1.25rem;
   font-weight: 600;
 }
 
@@ -770,7 +832,7 @@ button.tile.drop-after {
   border-radius: 5px;
   background: rgb(0 0 0 / 72%);
   color: #fff;
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
@@ -820,7 +882,7 @@ button.tile.drop-after {
   border-top: 1px solid var(--line);
   border-left: 3px solid var(--line-strong);
   background: var(--surface-2);
-  font-size: 14px;
+  font-size: 0.9375rem;
 }
 
 #status[hidden] {
@@ -869,5 +931,24 @@ button.tile.drop-after {
 @media (prefers-reduced-motion: reduce) {
   #status.busy .message::before {
     animation: none;
+  }
+}
+
+/* For people who ask their system for more contrast, or use forced colours. */
+@media (prefers-contrast: more) {
+  :root {
+    --line: var(--line-strong);
+    --text-2: var(--text);
+  }
+}
+
+@media (forced-colors: active) {
+  .dot.found {
+    background: CanvasText;
+  }
+
+  button.tile.selected,
+  .tabs button[aria-pressed='true'] {
+    outline: 3px solid Highlight;
   }
 }

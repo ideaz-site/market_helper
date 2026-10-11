@@ -18,6 +18,8 @@ Clicking the extension opens it in Chrome's side panel, which stays open while y
 
 A box's line shows what it will be filled with, and a red **!** when something needs putting right, such as an item with nothing for that detail. Opening a box also offers **Fill in just this box**, **Rename** (for when the page's own label isn't a helpful name) and **Remove this box**.
 
+**Text size** at the bottom of the panel makes everything in it Normal, Large or Largest. The panel also follows your browser's own font size setting, and your system's light or dark theme and its request for more contrast.
+
 Messages about what just happened appear in a bar pinned to the bottom of the panel; **OK** puts it away. After filling in, any box that was left out is marked with the reason.
 
 Once you have items under **My items**, each box gets a **Fill this box with** choice: **Text I type here**, or one of the item's details (title, price, quantity, condition, description, or any detail you added yourself). Item details come from the item chosen under **Item to use**, so one template can fill a listing form for any of your items.

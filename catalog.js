@@ -846,8 +846,8 @@ function renderItemEditor(item) {
       { className: 'columns' },
       itemField(item, 'price', 'Price', el('input', { inputMode: 'decimal', placeholder: '0.00' })),
       itemField(item, 'quantity', 'Quantity', el('input', { inputMode: 'numeric' })),
-      itemField(item, 'condition', 'Condition', condition),
     ),
+    itemField(item, 'condition', 'Condition', condition),
     itemField(
       item,
       'description',
